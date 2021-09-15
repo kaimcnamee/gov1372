@@ -1,7 +1,7 @@
 ---
 title: 'Data Exploration: Making Decisions'
-author: "Your name here"
-date: "September 9, 2021"
+author: "Kai McNamee"
+date: "September 15, 2021"
 output:
   pdf_document: default
   html_document:
@@ -128,7 +128,8 @@ The most common answer to this problem is .8. This corresponds to the reliabilit
 
 **What is the true probability the cab was Blue? Visualize the distribution of the guesses in the class using a histogram. What was the most common guess in the class?**
 
-The true probability is 0.41.  The most common guess in the class was 0.8.
+The true probability is 0.41 (green).  
+The most common guess in the class was 0.8 (red).
 
 ```{r}
 bias_data %>% 

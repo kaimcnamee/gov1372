@@ -137,7 +137,7 @@ player_stats <- player_data_long %>%
             score = sum(score), .groups = "drop")
 
 player_stats %>% 
-  arrange(desc(win))
+  arrange(desc(score))
 ```
 
 
@@ -150,12 +150,12 @@ player_stats %>%
 ```{r}
 
 player_data_long %>% 
-  filter(player == "titfortat") %>%
+  filter(player == "forgiver") %>%
   arrange(desc(score)) %>% 
   mutate(opponent = factor(opponent, levels = opponent)) %>% 
   ggplot(aes(x = opponent, y = score)) +
     geom_col() +
-    labs(x = "Opponent", y = "Score", title = "Tit-for-Tat scores against oppoonents") +
+    labs(x = "Opponent", y = "Score", title = "Forgiver scores against oppoonents") +
     theme_light()
   
 ```

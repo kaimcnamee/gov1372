@@ -104,10 +104,20 @@ sdo <- sdo %>%
 sdo %>% 
   filter(is.na(pid3) == FALSE) %>%
   ggplot(aes(x = sdo5)) +
-    geom_histogram(bins = 15, color = "white") + 
+    geom_histogram(aes(y = after_stat(count/sum(count))), 
+                   bins = 15, color = "white") + 
+    geom_vline(aes(xintercept = 2.05)) +
+    labs(x = "sdo5", y = "proportion", title = "SDO")
+
+sdo %>% 
+  filter(is.na(pid3) == FALSE) %>%
+  ggplot(aes(x = sdo5)) +
+    geom_histogram(aes(y = after_stat(count/sum(count))), 
+                   bins = 15, color = "white") + 
     geom_vline(aes(xintercept = x_int, color = party)) +
     # geom_text(label = "Mean = 2.05", x = mean(sdo$sdo5), y = 600) +
-    facet_wrap("pid3", labeller = as_labeller(labels))
+    facet_wrap("pid3", labeller = as_labeller(labels)) +
+    labs(x = "sdo5", y = "proportion", title = "SDO by party")
 
 sdo %>% 
   summarize(mean = mean(sdo5), standard_deviation = sd(sdo5))
@@ -152,6 +162,17 @@ Correlation matrices, like the one below, are useful for visualizing the pairwis
 
 Here is an example of what your correlation plot might look like, using the `ggcorrplot` package:
 
+```{r}
+
+corr <- sdo_model %>% 
+  select(sdo5, female, white, educ, age, pid3, ideo5) %>% 
+  drop_na() %>% 
+  cor(.)
+
+ggcorrplot(corr, type = "upper", outline.color = "white")
+```
+
+
 ![Example correlation plot.](./corr_plot_example.png)
 
 ## Question 6: Data Science Question
@@ -170,6 +191,10 @@ We also need to adjust the vote choice variable. Currently, `presvote16` codes v
 
 **First, create the `white` variable from the `race` variable, as well as `rep_vote` from `presvote16`. Then, fit the linear model described above. Comment on what you see. Is this in line with what we would expect based on social dominance theory? Interpret your results and comment on what you find, especially as it relates to social dominance theory. Note that you can explore other model specifications in the next question.** 
 
+The model seems to be in line with what we would expect to see based on SDT. SDO and voting for Trump are positively correlated. People who voted for Trump were presumably more conservative and more aligned with the Republican party, so you'd expect voting for Trump to also be positively correlated with pid3 and ideo5, which the model confirms. Sidanius and Pratto made the same argument, that political conservatism and its associated hierarchy enhancing legitimizing myths are  more aligned with high SDO. If we're accepting that higher SDO corresponds with a higher propensity to vote for Trump, you'd also expect female to be negatively correlated with the response variable. But the female variable also illustrates how this model might be using too much information to explain votes for Trump. I could see how female, white, educ, pid3 and ideo5 are all related in some way, so by choosing rep_vote as the response variable, we might just be demonstrating that all of these variables are somehow related and as a result overfitting the model. 
+
+I think the correlation matrix like the one above might be a better way to visually represent this web of relationships, since you can break down exactly which variables are relating to eachother. In terms of how SDO relates to the other variables given the ideas laid out in SDT, the correlation matrix above agrees with Sidanius and Pratto's arguments. 
+
 ```{r}
 sdo_model <- sdo %>% 
   mutate(white = ifelse(race == 1, 1, 0),
@@ -178,13 +203,6 @@ sdo_model <- sdo %>%
                               T ~ 0))
 lm_rep_vote <- lm(data = sdo_model, rep_vote ~ sdo5 + female + white + educ + age + pid3 + ideo5)
 summary(lm_rep_vote)
-
-corr <- sdo_model %>% 
-  select(sdo5, female, white, educ, age, pid3, ideo5) %>% 
-  drop_na() %>% 
-  cor(.)
-
-ggcorrplot(corr, type = "upper", outline.color = "white")
 ```
 
 

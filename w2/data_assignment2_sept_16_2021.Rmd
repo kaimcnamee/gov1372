@@ -121,7 +121,8 @@ player_data_long <- bind_rows(player1_data, player2_data)
 
 player_data_long %>% 
   group_by(player) %>% 
-  summarize(score = sum(score)) %>% 
+  summarize(mean_score = mean(score), 
+            score = sum(score)) %>% 
   arrange(desc(score))
 ```
 

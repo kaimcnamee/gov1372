@@ -119,7 +119,8 @@ TIPI_dist_comp <- personality_data %>%
     theme_minimal() +
     scale_fill_brewer(palette = "Dark2") +
     scale_x_continuous(limits = c(0, 7)) +
-    scale_linetype_discrete(name = "", labels = c("International mean", "Sample mean")) + 
+    scale_linetype_discrete(name = "", 
+                            labels = c("International mean", "Class mean")) + 
     theme(panel.spacing = unit(2, "lines")) %>% 
     labs(x = "", y = "")
 
@@ -160,6 +161,8 @@ TIPI_sd_comp <- class_inter %>%
 
 class_inter
 TIPI_dist_comp
+TIPI_mean_comp
+TIPI_sd_comp
 ```
 
 
@@ -215,7 +218,17 @@ q7_lm1 <-  lm(formula = Overall ~ TIPI_extraversion + TIPI_agreeableness +
 
 q7_lm2 <-  lm(formula = Overall ~ TIPI_agreeableness + TIPI_conscientiousness, data = personality_data)
 
-stargazer(q7_lm1, q7_lm2, type = "text")
+q7_lm3 <-  lm(formula = Social ~ TIPI_extraversion + TIPI_agreeableness + 
+       TIPI_conscientiousness + TIPI_emot_stability + TIPI_openness, data = personality_data)
+
+q7_lm4 <-  lm(formula = Social ~ TIPI_agreeableness + TIPI_conscientiousness, data = personality_data)
+
+q7_lm5 <-  lm(formula = Economic ~ TIPI_extraversion + TIPI_agreeableness + 
+       TIPI_conscientiousness + TIPI_emot_stability + TIPI_openness, data = personality_data)
+
+q7_lm6 <-  lm(formula = Economic ~ TIPI_agreeableness + TIPI_conscientiousness, data = personality_data)
+
+stargazer(q7_lm1, q7_lm2, q7_lm3, q7_lm4, q7_lm5, q7_lm6, type = "text")
 
 personality_data %>% 
   select(Overall, TIPI_extraversion, TIPI_agreeableness, TIPI_conscientiousness, 
@@ -236,6 +249,11 @@ Linear regression shows that only two of the personality traits (agreeableness, 
 OLS might not be the best linear regression model to fit the data because the variables might not be linearly related. Breaking down the relationships between each independent variable with the dependent variable shows that there aren't many strong relationships between the personality predictors and social ideology -- only agreeableness and conscientiousness show a strong independently linear relationship with overall ideology.
 
 Additionally, even when p-value coefficients indicate significance, other model outputs can be misleading. For example, when you run the regression with all 5 personality predictors, the multiple R-squared value will always increase when you add more variables. So while the R-squared value of the full model is 0.01 higher than a model using only the significant predictors, none of the additional predictos are helping you understand the independent variable -- adding the non significant predictors doesn't actually make the model any better at explaining the relationships. It also seems like individual p-values are affected by the presence of other variables, since the p-values for agreeableness and conscientiousness in the full model are higher. 
+
+```{r}
+stargazer(q7_lm1, q7_lm3, q7_lm5, type = "text")
+```
+
 
 ## Question 8: Data Science Question
 Is the Big Five really best characterized as five factors? If we ask ten questions on a personality inventory, we might think that these questions actually reflect only five underlying (or latent) variables. In fact, this is the supposition of the BFI-10 and the TIPI. Factor analysis is one way to examine data and investigate if the dimension of the data can be reduced from many variables to fewer underlying factors.  **Conduct a factor analysis on either the BFI-10 or the TIPI questions (note, these are the numbered variables, not the named variables) You may want to use the \texttt{fa.parallel} function from the \texttt{psych} package, which you can read more about [here](https://cran.r-project.org/web/packages/psychTools/vignettes/factor.pdf). How many factors does your analysis suggest best explain the class data? Optional bonus: run the code several times. Does your answer change? If so, why?**

@@ -97,7 +97,7 @@ Women's suffrage: coded as 1 if women are able to vote AND country has a polity 
 
 Autocracy: coded using Polity score. If Polity score is 5 or below, autocracy is coded as 1. If Polity is 6 or higher, autocracy is 0.
 
-This means that some countries can be coded autocratic (Polity ≥ 5) and having women's suffrage (ex: if Polity = 2, it's coded as autocracy = 1 and suffrage = 1)
+This means that some countries can be coded autocratic (Polity <= 5) and having women's suffrage (ex: if Polity = 2, it's coded as autocracy = 1 and suffrage = 1)
 
 ## Question 3 
 

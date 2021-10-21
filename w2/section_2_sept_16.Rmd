@@ -1,0 +1,24 @@
+---
+title: "section_2_sept_16"
+author: "Kai McNamee"
+date: "9/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+```
+
+```{r}
+
+pair_function <- function(x){
+  t((combn(x, 2)))
+}
+
+pair_function(c("a", "b", "c"))
+
+# To use function sourced from another file, use source()
+```
+

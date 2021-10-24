@@ -69,12 +69,22 @@ head(protest_df$household_income)
 
 As usual it is important to first examine the structure of the data. What are the two main outcome variables of interest to Reny and Newman? How were they measured and how are they coded in the data? What was the treatment? **Take a look at the data and determine which are the two outcome variables of interest. Observe the scale of each.**
 
+Reny and Newman use data from the Nationscap suvey (NS), a survey administered by the Democracy Fund and UCLA. The NS is a weekly survey with 6,250 respondents per week and an average of 900 respondents per day, 
+
+Reny and Newman measure 2 outcome variables:
+
+1. group_favorability_the_police: survey response indicating how strongly an individual favors the police (1 is strongest favorability, 4 is least favorability)
+2. discrimination_blacks: survey response indicating how much discrimination respondent perceives Black people experience (1 is least, 4 is most) 
+
 ##Question 2
 
 ###Part a
 R has a special 'date' class for storing and manipulating dates as seen below. Date variables can conveniently be logically compared and arithmetically manipulated. Using the day variable find out how many days the dataset spans. **First check using the code below that the day variable is of the class 'date'. Next subtract the latest day in the sample from the first day to calculate the timespan covered by the dataset. Hint: functions like max() and min() work for date variables too!**
 ```{r}
 class(protest_df$day)
+
+protest_df %>% 
+  summarize(days = max(day) - min(day))
 ```
 
 
@@ -82,9 +92,14 @@ class(protest_df$day)
 On what date is the treatment said to have occurred? **Find the date for which the day_running variable is 0. Then modify the code below to add a variable to each row for whether or not the observation was before or after treatment.**
 
 ```{r, error=TRUE}
-#Change the object to be the date of the protest spread, remember to put it in quotes if you copy/paste!
+# Change the object to be the date of the protest spread, remember to put it in
+# quotes if you copy/paste! 
 
-protest_df_bydate <- protest_df %>%  mutate(before = ifelse(day<as.Date("INSERT_TREATMENT_DAY_HERE"), 1,0))
+# Day of treatment 2020-05-28
+
+protest_df_bydate <- protest_df %>% 
+  mutate(treatment = ifelse(day_running < 0, 0, 1)) %>% 
+  drop_na()
 ```
 
 
@@ -93,20 +108,81 @@ protest_df_bydate <- protest_df %>%  mutate(before = ifelse(day<as.Date("INSERT_
 ###Part a
 Compare the average for each outcome variable before and after the onset of the protests. Are the differences statistically significant? **Calculate the outcome variable means for before and after treatment. Conduct a test as to whether the differences in means are statistically significant. Hint: you can use either the t.test() function or difference_in_means() from the estimatr package**
 
+```{r}
+protest_df_bydate %>% 
+  group_by(treatment) %>% 
+  summarize(police = mean(group_favorability_the_police), 
+            discrimination_mean = mean(discrimination_blacks), .groups = "drop")
+```
+
+
 ###Part b
 It might be that the period before and after the treatment was different in ways in addition to the onset of the protests. Use the same procedure as above to check for differences between two means of a survey response measuring favorability towards a group besides the police. **Calculate the means from before and after the treatment and conduct a test of statistical significance of the difference for another measure of group favorability that was recorded in the survey (e.g. evangelicals, Jews, socialists, or whites). Is there also a substantive or statistically significant difference on that variable? Should that change our confidence in attributing the opinion changes found in part a to the George Floyd protests?**
+
+```{r}
+protest_df_bydate %>% 
+  group_by(treatment) %>% 
+  summarize(police = mean(group_favorability_the_police), 
+            discrimination_mean = mean(discrimination_blacks),
+            evangelicals_mean = mean(group_favorability_evangelicals),
+            socialists_mean = mean(group_favorability_socialists), .groups = "drop")
+
+
+
+
+# conduct t test comparing group_favorability_socialists when treatment > 0 and
+# treatment == 0
+
+mean(protest_df_bydate$group_favorability_socialists[protest_df_bydate$treatment > 0])
+mean(protest_df_bydate$group_favorability_socialists[protest_df_bydate$treatment == 0])
+
+t.test(protest_df_bydate$group_favorability_socialists[protest_df_bydate$treatment > 0], protest_df_bydate$group_favorability_socialists[protest_df_bydate$treatment == 0])
+
+# With a p-value of 0.1367, we can't reject the null hypothesis that the means
+# of group_favorability_socialists before and after the treatment are equal.
+```
+
+```{r}
+# Visualizing group_faovrability_socialists
+
+protest_df_bydate %>% 
+  group_by(day, treatment, day_running) %>% 
+  summarize(group_favorability_socialists = mean(group_favorability_socialists), .groups = "drop") %>% 
+  ggplot(aes(x = day_running, y = group_favorability_socialists)) +
+    geom_point() +
+    geom_vline(xintercept = 0, lty = "dashed") +
+    theme_light()
+```
+
 
 ## Question 4
 
 ###Part a
 In order to create figures similar to the panels in Figure 2 in Reny and Newman (2021) we must first manipulate the data to be more usable. If we intend to graph the average of each outcome variable for each day, on what variable should we group the data using group_by? **Create a new object that is the data split out by the appropriate group and producing the average for each of the two outcome variables for each day. Also be sure to preserve an indicator for whether the observations are from before or after the spread of the protests.** 
 
+```{r}
+protest_clean_all<- protest_df_bydate %>% 
+  group_by(day, treatment, day_running) %>% 
+  summarize(police = mean(group_favorability_the_police), 
+            discrimination_mean = mean(discrimination_blacks), .groups = "drop")
+```
+
+
 
 ###Part b
 Graph the results for the entire sample. **Graph the results for the entire sample for both outcome variables by day. Include a vertical line demarcating when the protests started to spread. Does there appear to be a shift in the outcome variables from before to after the protests began to spread?**
 
+```{r}
+protest_clean_all %>% 
+  ggplot(aes(x = day_running, police)) +
+    geom_point() +
+    geom_vline(xintercept = 0, lty = "dashed")
+```
+
+
 ###Part c
 It might be useful to more clearly illustrate the differences in the trend lines before and after the protests began. **Modify the code below to include a separate line of best fit for before and after the protests began. Does the trend line align with your previous reading of the graph? Remember to add a vertical line demarcating for the onset of treatment.**
+
 
 ```{r}
 #An example of how to do multiple lies of best fit using example data from mtcars (mtcars is a dataset included with the tidyverse library)
@@ -125,9 +201,62 @@ ggplot(data=mtcars, aes(x=hp, y = mpg, shape=as.factor(cyl))) +
 ## Question 5 
 ###Part a 
 The attitudes in question are no doubt highly influenced by the respondent's race and ethnicity. How do the graphs from question 4 differ for white and Black respondents. **Subset the data to include only white respondents and recreate the graphs from part c of question 4. Do the same with the data from only Black respondents. How do these differ from each other? Hint: Be careful when subsetting white responses to not also include Hispanic responses. ** 
+```{r}
+protest_clean_race <- protest_df_bydate %>% 
+  group_by(day, treatment, day_running, race_ethnicity) %>% 
+  summarize(police = mean(group_favorability_the_police), 
+            discrimination_mean = mean(discrimination_blacks), .groups = "drop")
+
+labels <- c("1" = "White", "2" = "Black")
+
+protest_clean_race %>% 
+  filter(race_ethnicity == 1 | race_ethnicity == 2) %>%
+  ggplot(aes(x = day_running, y = police, color = as.factor(treatment))) +
+    geom_point(size = 0.5, alpha = 0.5) +
+    geom_smooth(method = "lm", formula = y ~ x, se = F) +
+    facet_wrap("race_ethnicity", labeller = as_labeller(labels)) +
+    theme_light() + 
+    scale_color_discrete(name = "Treatment", labels = c("0" = "Before protests", "1" = "After protests")) +
+    labs(title = "Police unfavorability before and after protests", 
+         x = "Day running", 
+         y = "Police unfavorability")
+```
+```{r}
+protest_clean_all %>% 
+  ggplot(aes(x = day_running, y = police, color = as.factor(treatment))) +
+    geom_point(size = 0.5, alpha = 0.5) +
+    geom_smooth(method = "lm", formula = y ~ x, se = F) +
+    theme_light() + 
+    scale_color_discrete(name = "Treatment", labels = c("0" = "Before protests", "1" = "After protests")) +
+    labs(title = "Police unfavorability before and after protests", 
+         x = "Day running", 
+         y = "Police unfavorability")
+```
+
 
 ###Part b
 As we have learned partisanship heavily influences how people take in and process new information. **Split the sample into Democrats, Republicans and independents and use them to produce the same graphs as part a (either all in the same figure or separate). Compare both the level and the trends for each party affiliation. What could this imply about how partisanship affects processing?**
+
+```{r}
+protest_df_bydate %>% 
+  group_by(pid7) %>% 
+  mutate(party = case_when(pid7 < 4 ~ "Democrat",
+                           pid7 == 4 ~ "Independent",
+                           T ~ "Republican")) %>% 
+  ungroup() %>% 
+  group_by(day, treatment, day_running, party) %>% 
+  summarize(police = mean(group_favorability_the_police), 
+            discrimination_mean = mean(discrimination_blacks), .groups = "drop") %>% 
+  ggplot(aes(x = day_running, y = police, color = as.factor(treatment))) +
+    geom_point(size = 0.5, alpha = 0.5) +
+    geom_smooth(method = "lm", formula = y ~ x, se = F) +
+    facet_wrap("party") + 
+    theme_light() + 
+    scale_color_discrete(name = "Treatment", labels = c("0" = "Before protests", "1" = "After protests"))
+  
+```
+
+
 
 
 ##Question 6: 
@@ -156,9 +285,24 @@ Racial resentment is often considered a symbolic attitude in strength and consis
 ###Part a 
 Run an initial regression examining the relationship between favorability towards the police, party, and treatment. **Run a regression examining party and the onset of the protests' effect on favorability towards the police. Interpret the results**
 
+```{r}
+m1 <- lm(group_favorability_the_police ~ pid7 + treatment, data = protest_df_bydate)
+summary(m1)
+```
+
+The regression indicates that party and treatment are both significantly impact individuals' favorability towards the police. The coefficient for pid7 is -0.13, meaning as respondents become more Republican (higher pid7 value), their favorability towards the police increases (lower group_favorability_the_police score). On the flip side, when respondents are more Democrat (lower pid7 value), their favorability towards the police decreases (higher group_favorability_the_police score). Additionally, the effect of treatent is significant -- after the protests (treatment = 1) favorability towards the police decreases.
 
 ###Part b
 The above functional form probably does not accurately model the relationship of all the relevant covariates in the dataset. What functional form would you recommend using and why? What covariates would you add? Is there need for an interaction term? **Run a regression of your specificiation and interpret the results. Justify your choices in modeling.**
+
+```{r}
+m2 <- lm(group_favorability_the_police ~ ideo5 + treatment, data = protest_df_bydate)
+
+stargazer
+```
+
+
+
 
 ###Part c
 Linear models are not well suited for bounded ordinal responses. Instead ordinal logit or probit models are frequently employed in order to capture a) that the outcomes are restricted to a scale (in the case of police unfavorability 1-4) and b) that the differences between different rungs on the scale are not necessarily equivalent (going from very unfavorable to somewhat unfavorable is not necessarily the same difference as going from somewhat unfavorable to somewhat favorable). **Using the code below from the MASS package run an ordinal probit model using the same model as part b. How do the coefficients differ from part b?**
@@ -171,4 +315,66 @@ select <- dplyr::select
 polr(data = , formula = , method = "probit")
 ```
 
+###Section
+
+```{r}
+protest_df_bydate %>% 
+  group_by(day_running) %>% 
+  drop_na() %>% 
+  summarize(police = mean(group_favorability_the_police),
+            disc = mean(discrimination_blacks),
+            treatment = as.factor(treatment))%>% 
+  ggplot(aes(x = day_running, y = police, color = treatment)) +
+    geom_point(size = 0.8, alpha = 0.8) + 
+    geom_smooth(method = "lm", formula = y ~ x)
+```
+```{r}
+decay_before <- protest_df_bydate %>% 
+  group_by(day_running) %>% 
+  drop_na() %>% 
+  summarize(police = mean(group_favorability_the_police),
+            disc = mean(discrimination_blacks),
+            treatment = as.factor(treatment), .groups = "drop") %>% 
+  filter(day_running < 0)
+
+decay_after <- protest_df_bydate %>% 
+  group_by(day_running) %>% 
+  drop_na() %>% 
+  summarize(police = mean(group_favorability_the_police),
+            disc = mean(discrimination_blacks),
+            treatment = as.factor(treatment), .groups = "drop") %>% 
+  filter(day_running >= 0)
+
+m_before <- lm(police ~ day_running, data = decay_before)
+m_after <- lm(police ~ day_running, data = decay_after)
+
+stargazer(m_before, m_after, type = "text")
+```
+```{r}
+pred_data <- data.frame(day_running = seq(0, 200, 1))
+
+preds_before <- predict(m_before, pred_data, se.fit = T)
+preds_before <- tibble(police = preds_before$fit, 
+                       day_running = seq(0, 200, 1), 
+                       treatment = 0)
+
+preds_after <- predict(m_after, pred_data, se.fit = T)
+preds_after <- tibble(police = preds_after$fit, 
+                      day_running = seq(0, 200, 1),
+                      treatment = 1)
+
+preds_combined <- rbind(preds_before, preds_after) %>% 
+  mutate(treatment = ifelse(treatment == 0, "before", "after")) %>% 
+  pivot_wider(names_from = treatment, values_from = police) %>% 
+  mutate(diff = before - after)
+
+preds_combined %>% 
+  ggplot(aes(x = day_running)) +
+    geom_path(aes(y = before)) +
+    geom_path(aes(y = after)) +
+    geom_vline(xintercept = 155, lty = "dashed") +
+    labs(x = "Day running", y = "Police ufavorability") +
+    theme_light() +
+    labs(title = "Modelling treatment effect day after protests")
+```
 

@@ -113,6 +113,14 @@ protest_df_bydate %>%
   group_by(treatment) %>% 
   summarize(police = mean(group_favorability_the_police), 
             discrimination_mean = mean(discrimination_blacks), .groups = "drop")
+
+# Difference in means test for police favorability
+
+t.test(protest_df_bydate$group_favorability_the_police[protest_df_bydate$treatment > 0], protest_df_bydate$group_favorability_the_police[protest_df_bydate$treatment == 0])
+
+# Difference in means test for perceived discrimination
+
+t.test(protest_df_bydate$discrimination_blacks[protest_df_bydate$treatment > 0], protest_df_bydate$discrimination_blacks[protest_df_bydate$treatment == 0])
 ```
 
 
@@ -154,7 +162,6 @@ protest_df_bydate %>%
     theme_light()
 ```
 
-
 ## Question 4
 
 ###Part a
@@ -167,8 +174,6 @@ protest_clean_all<- protest_df_bydate %>%
             discrimination_mean = mean(discrimination_blacks), .groups = "drop")
 ```
 
-
-
 ###Part b
 Graph the results for the entire sample. **Graph the results for the entire sample for both outcome variables by day. Include a vertical line demarcating when the protests started to spread. Does there appear to be a shift in the outcome variables from before to after the protests began to spread?**
 
@@ -176,7 +181,16 @@ Graph the results for the entire sample. **Graph the results for the entire samp
 protest_clean_all %>% 
   ggplot(aes(x = day_running, police)) +
     geom_point() +
-    geom_vline(xintercept = 0, lty = "dashed")
+    geom_vline(xintercept = 0, lty = "dashed") +
+    theme_light() +
+    labs(x = "Day running", y = "Police favorability", title = "Police favorability over time")
+
+protest_clean_all %>% 
+  ggplot(aes(x = day_running, discrimination_mean)) +
+    geom_point() +
+    geom_vline(xintercept = 0, lty = "dashed") +
+    theme_light() +
+    labs(x = "Day running", y = "Perceived anti-Black discrimination", title = "Perceived anti-Black discrimination over time")
 ```
 
 
@@ -220,6 +234,18 @@ protest_clean_race %>%
     labs(title = "Police unfavorability before and after protests", 
          x = "Day running", 
          y = "Police unfavorability")
+
+protest_clean_race %>% 
+  filter(race_ethnicity == 1 | race_ethnicity == 2) %>%
+  ggplot(aes(x = day_running, y = discrimination_mean, color = as.factor(treatment))) +
+    geom_point(size = 0.5, alpha = 0.5) +
+    geom_smooth(method = "lm", formula = y ~ x, se = F) +
+    facet_wrap("race_ethnicity", labeller = as_labeller(labels)) +
+    theme_light() + 
+    scale_color_discrete(name = "Treatment", labels = c("0" = "Before protests", "1" = "After protests")) +
+    labs(title = "Perceived anti-Black discrimination before and after protests", 
+         x = "Day running", 
+         y = "Percieved discrimination")
 ```
 ```{r}
 protest_clean_all %>% 
@@ -252,8 +278,26 @@ protest_df_bydate %>%
     geom_smooth(method = "lm", formula = y ~ x, se = F) +
     facet_wrap("party") + 
     theme_light() + 
-    scale_color_discrete(name = "Treatment", labels = c("0" = "Before protests", "1" = "After protests"))
-  
+    scale_color_discrete(name = "Treatment", labels = c("0" = "Before protests", "1" = "After protests")) +
+    labs(x = "Day Running", y = "Police Favorability", title = "Police favorability over time")
+
+protest_df_bydate %>% 
+  group_by(pid7) %>% 
+  mutate(party = case_when(pid7 < 4 ~ "Democrat",
+                           pid7 == 4 ~ "Independent",
+                           T ~ "Republican")) %>% 
+  ungroup() %>% 
+  group_by(day, treatment, day_running, party) %>% 
+  summarize(police = mean(group_favorability_the_police), 
+            discrimination_mean = mean(discrimination_blacks), .groups = "drop") %>% 
+  ggplot(aes(x = day_running, y = discrimination_mean, color = as.factor(treatment))) +
+    geom_point(size = 0.5, alpha = 0.5) +
+    geom_smooth(method = "lm", formula = y ~ x, se = F) +
+    facet_wrap("party") + 
+    theme_light() + 
+    scale_color_discrete(name = "Treatment", labels = c("0" = "Before protests", "1" = "After protests")) +
+    labs(x = "Day Running", y = "Perceived anti-Black discrimination", 
+         title = "Perceived anti-Black discrimination over time")
 ```
 
 
@@ -290,7 +334,7 @@ m1 <- lm(group_favorability_the_police ~ pid7 + treatment, data = protest_df_byd
 summary(m1)
 ```
 
-The regression indicates that party and treatment are both significantly impact individuals' favorability towards the police. The coefficient for pid7 is -0.13, meaning as respondents become more Republican (higher pid7 value), their favorability towards the police increases (lower group_favorability_the_police score). On the flip side, when respondents are more Democrat (lower pid7 value), their favorability towards the police decreases (higher group_favorability_the_police score). Additionally, the effect of treatent is significant -- after the protests (treatment = 1) favorability towards the police decreases.
+The regression indicates that party and treatment are both significantly impact individuals' favorability towards the police. The coefficient for pid7 is -0.13, meaning as respondents become more Republican (higher pid7 value), their favorability towards the police increases (lower group_favorability_the_police score). On the flip side, when respondents are more Democrat (lower pid7 value), their favorability towards the police decreases (higher group_favorability_the_police score). Additionally, the effect of treatment is significant -- after the protests (treatment = 1) favorability towards the police decreases.
 
 ###Part b
 The above functional form probably does not accurately model the relationship of all the relevant covariates in the dataset. What functional form would you recommend using and why? What covariates would you add? Is there need for an interaction term? **Run a regression of your specificiation and interpret the results. Justify your choices in modeling.**
@@ -302,10 +346,16 @@ m3 <- lm(group_favorability_the_police ~ ideo5 + pid7 + treatment, data = protes
 stargazer(m1, m2, m3, type = "text")
 ```
 
-First I would switch party identification for political ideology, since I think ideology is likely what determines party identification, and ideology probably has a stronger impact on how you view the world. Analyzing the data using ideology instead cuts out the ambiguity of which factors are determining party identification. Furthermore, comparing regression models using pid7 or ideo5 shows that ideo5 has a stronger negative effect on police unfavorability, which I think makes it a more informative variable to include in the model. 
+First I would switch party identification for political ideology, since I think ideology is likely what determines party identification, and ideology probably has a stronger impact on how you view the world. Analyzing the data using ideology instead cuts out the ambiguity of which factors are determining party identification. Furthermore, comparing regression models using pid7 or ideo5 shows that ideo5 has a stronger effect on police favorability, which I think makes it a more informative variable to include in the model. 
 
-I would also use an interaction term ideo5*treatment, since I think it's likely your ideology impacts how you perceived the George Floyd protests. I suspect liberals would more likely 
+I would also use an interaction term ideo5*treatment, since I think it's likely your ideology impacts how you perceived the George Floyd protests. The charts in question 5b show that the 1. Democrats have lower pre-protest favorability towards police than Republicans, and 2. Democrats exhibit a greater post-protest decrease in favorability than Republicans. 
 
+```{r}
+m4 <- lm(group_favorability_the_police ~ ideo5 + treatment + ideo5*treatment, data = protest_df_bydate)
+summary(m4)
+```
+
+The model shows that the interaction term is in fact significant; when ideo5 is higher (survey respondents are more conservative), the effect of treatment is lower (favorability towards police declines less).
 
 ###Part c
 Linear models are not well suited for bounded ordinal responses. Instead ordinal logit or probit models are frequently employed in order to capture a) that the outcomes are restricted to a scale (in the case of police unfavorability 1-4) and b) that the differences between different rungs on the scale are not necessarily equivalent (going from very unfavorable to somewhat unfavorable is not necessarily the same difference as going from somewhat unfavorable to somewhat favorable). **Using the code below from the MASS package run an ordinal probit model using the same model as part b. How do the coefficients differ from part b?**
@@ -315,8 +365,18 @@ Linear models are not well suited for bounded ordinal responses. Instead ordinal
 library(MASS)
 select <- dplyr::select
 
-polr(data = , formula = , method = "probit")
+protest_probit_data <- protest_df_bydate %>% 
+  mutate(group_favorability_the_police = as_factor(group_favorability_the_police))
+
+m5c <- polr(formula = group_favorability_the_police ~ ideo5 + treatment + ideo5*treatment, 
+     data = protest_probit_data, 
+     method = "probit")
+
+summary(m5c)
+stargazer(m5c, m4, type = "text")
 ```
+
+The coefficients for the linear and pobit models are relative similar, but the coefficients for the probit model are all slightly higher (around 0.01-0.05 higher). The probit model also lists several intercept values (which I don't know how to interpret).
 
 ###Section
 
@@ -372,12 +432,27 @@ preds_combined <- rbind(preds_before, preds_after) %>%
   mutate(diff = before - after)
 
 preds_combined %>% 
+  # mutate(intercept = 155) %>% 
+  select(-diff) %>% 
+  pivot_longer(cols = before:after, values_to = "value", names_to = "type") %>% 
+  ggplot(aes(x = day_running, y = value, color = type)) +
+    geom_path() +
+    geom_vline(xintercept = 155, lty = "dashed") +
+    labs(x = "Day running", y = "Police favorability", 
+         title = "Modelling treatment effect decay after protests") +
+    scale_color_discrete(name = "Model data", 
+                         labels = c("after" = "After protests", 
+                                    "before" = "Before protests")) +
+    theme_light()
+      
+preds_combined %>% 
   ggplot(aes(x = day_running)) +
-    geom_path(aes(y = before)) +
+    geom_path(aes(y = before), lty = "dotted") +
     geom_path(aes(y = after)) +
     geom_vline(xintercept = 155, lty = "dashed") +
-    labs(x = "Day running", y = "Police ufavorability") +
-    theme_light() +
-    labs(title = "Modelling treatment effect day after protests")
+    geom_text(aes(x = 170, y = 2), label = "test") +
+    labs(x = "Day running", y = "Police favorability", 
+         title = "Modelling treatment effect decay after protests") +
+    theme_light()
 ```
 

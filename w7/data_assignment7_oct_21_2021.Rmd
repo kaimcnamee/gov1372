@@ -297,11 +297,14 @@ The above functional form probably does not accurately model the relationship of
 
 ```{r}
 m2 <- lm(group_favorability_the_police ~ ideo5 + treatment, data = protest_df_bydate)
+m3 <- lm(group_favorability_the_police ~ ideo5 + pid7 + treatment, data = protest_df_bydate)
 
-stargazer
+stargazer(m1, m2, m3, type = "text")
 ```
 
+First I would switch party identification for political ideology, since I think ideology is likely what determines party identification, and ideology probably has a stronger impact on how you view the world. Analyzing the data using ideology instead cuts out the ambiguity of which factors are determining party identification. Furthermore, comparing regression models using pid7 or ideo5 shows that ideo5 has a stronger negative effect on police unfavorability, which I think makes it a more informative variable to include in the model. 
 
+I would also use an interaction term ideo5*treatment, since I think it's likely your ideology impacts how you perceived the George Floyd protests. I suspect liberals would more likely 
 
 
 ###Part c

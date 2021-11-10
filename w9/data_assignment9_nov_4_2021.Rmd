@@ -195,8 +195,15 @@ Treatments varied by low to high disgust and low to high anxiety conditions. In 
 
 Treatment conditions were manipulated in a 2x2 design, so the text respondents read were low anxiety/low disgust, high anxiety/low disgust, low anxiety/high disgust, and high anxiety/high disgust. 
 
+The symptoms presented in each condition were as follows:
+
 ```{r}
-answers
+answers %>% 
+  select(-treat_rand1) %>% 
+  rename_with(.cols = contains("Q12"), ~c("symptoms_fatigue", "symptoms_headaches", 
+                                          "symptoms_diarrhea", "symptoms_joint", 
+                                          "symptoms_boils", "symptoms_warts", 
+                                          "symptoms_fever"))
 ```
 
 
@@ -204,13 +211,91 @@ answers
 ###Part b
 The paper lays out three distinct hypotheses concerning the impact of disgust on information uptake and search. **What are the three hypotheses? Which outcome variables in Study 1 speak to which of these hypotheses? Hint: Look at pages 267 and 268 for the hypotheses**
 
+Disgust is part of the behavioral immune system, and it helps us avoid exposure to pathogens. Things that elicit disgust (bodily fluids, spoiled food, rodents, animals associated with disease, etc.) can trigger the behavioral response of avoidance, which helps humans stay healthy. Based on the existing literature, the authors describe 3  hypotheses on how disgust impacts impacts learning and information uptake:
+
+1. Emotional arousal (ex: disgust) leads to heightened attention to the stimulus (ie the disgusting thing), which leads to greater memory of the stimulus, and worse memory of peripheral objects. The experiment measures memory by asking respondents what the corresponding symptoms were for the anxiety/disgust condition they were presented (Q12 variables). 
+
+2. Anticipation of disgust causes people to avoid disgusting situations (ex: when people anticipate medical treatment will be disgusting, they delay seeking treatment). The experiment also measures avoidance through the symptoms questions (Q12; if respondents anticipate the text to be disgusting, they might read it with less attention and remember the symptoms incorrectly) and whether the respondent would seek more information (Q15).
+
+3. Disgust could lead to curiosity if the respondent perceives themselves to be safe from the threat of the disgusting stimuli. Woody and Teachman 2006 find that people enjoy disgust as long as it is "framed as unreal." The experiment also measures intrigue through the symptoms questions (Q12; if the respondents are curious, they might read the symptoms more carefully and remember the symptoms better) and whether the respondent would seek more information (Q15)
+
 ##Question 3
 
 ###Part a
 Often times when running an experiment a researcher will include a 'manipulation check' to confirm that the treatment was noticed and is having some of its intended effect. In this study they ask about the emotional response to the fictitious virus using two three item emotional indices: anxiety (afraid, anxious, worried) and disgust (disgusted, grossed out, repulsed). Take the average of the responses for each emotional index and check to see if the treatments had the desired manipulation. **Compare the average anxiety and disgust responses for each of the four treatments. Are there statistically significant differences in the way one would expect?**
 
+```{r}
+data_clean %>% 
+  drop_na() %>% 
+  group_by(treat_rand1) %>% 
+  summarize(mean_disgust = mean(disgust), mean_gross = mean(gross), 
+            mean_repulsed = mean(repulsed), mean_afraid = mean(afraid),
+            mean_anxious = mean(anxious), mean_worried = mean(worried), 
+            .groups = "drop") %>% 
+  mutate(condition = c("low anxiety/low disgust", "high anxiety/low disgust", 
+                       "low anxiety/high disgust", "high anxiety/high disgust")) %>% 
+  select(condition, treat_rand1, mean_disgust, mean_anxious)
+
+
+# Manipulating anxiety -- differences in disgust not significant
+t.test(data_clean$disgust[data_clean$treat_rand1 == 1], data_clean$disgust[data_clean$treat_rand1 == 2])
+t.test(data_clean$disgust[data_clean$treat_rand1 == 3], data_clean$disgust[data_clean$treat_rand1 == 4])
+
+# Manipulating disgust -- differences in disgust are significant
+t.test(data_clean$disgust[data_clean$treat_rand1 == 1], data_clean$disgust[data_clean$treat_rand1 == 3])
+t.test(data_clean$disgust[data_clean$treat_rand1 == 2], data_clean$disgust[data_clean$treat_rand1 == 4])
+
+# Manipulating anxiety -- differences in anxiety not significant
+t.test(data_clean$anxious[data_clean$treat_rand1 == 1], data_clean$anxious[data_clean$treat_rand1 == 2])
+t.test(data_clean$anxious[data_clean$treat_rand1 == 3], data_clean$anxious[data_clean$treat_rand1 == 4])
+
+# Manipulating disgust -- differences in anxiety not significant
+t.test(data_clean$anxious[data_clean$treat_rand1 == 1], data_clean$anxious[data_clean$treat_rand1 == 3])
+t.test(data_clean$anxious[data_clean$treat_rand1 == 2], data_clean$anxious[data_clean$treat_rand1 == 4])
+```
+The only manipulation that had a 95% statistically significant difference between means was changing the disgust level for both high and low anxiety conditions -- manipulating the passage from low to high disgust had a significantly significant impact on how many respondents reported feeling disgust afte reading. 
+
+
 ###Part b
 Choose one of the three hypotheses identified in Question 2. Compare the responses on one or more of the outcomes relevant to that hypothesis. Is the hypothesis supported by the data? **For one or more outcome variables relevant to one of the three hypotheses check for statistically significant differences. What can we conclude from the data?**
+
+
+1. Emotional arousal (ex: disgust) leads to heightened attention to the stimulus (ie the disgusting thing), which leads to greater memory of the stimulus, and worse memory of peripheral objects. The experiment measures memory by asking respondents what the corresponding symptoms were for the anxiety/disgust condition they were presented (Q12 variables). 
+
+According to this hypothesis, respondents who report high levels of disgust or anxiety should remember the symptoms better than those who report lower levels of disgust or anxiety. 
+
+
+```{r}
+answers_clean <- answers %>% 
+  select(-labels) %>% 
+  rename_with(.cols = contains("Q12"), ~c("ans_symptoms_fatigue", "ans_symptoms_headaches", 
+                                          "ans_symptoms_diarrhea", "ans_symptoms_joint", 
+                                          "ans_symptoms_boils", "ans_symptoms_warts", 
+                                          "ans_symptoms_fever"))
+
+data_h1 <- data_clean %>% 
+  select(treat_rand1, disgust, anxious, contains("symptoms")) %>% 
+  left_join(answers_clean, by = "treat_rand1") %>% 
+  mutate(check_fatigue = ifelse(symptoms_fatigue == ans_symptoms_fatigue, 1, 0),
+         check_headaches = ifelse(symptoms_headaches == ans_symptoms_headaches, 1, 0),
+         check_diarrhea = ifelse(symptoms_diarrhea == ans_symptoms_diarrhea, 1, 0),
+         check_joint = ifelse(symptoms_joint == ans_symptoms_joint, 1, 0),
+         check_boils = ifelse(symptoms_boils == ans_symptoms_boils, 1, 0),
+         check_warts = ifelse(symptoms_warts == ans_symptoms_warts, 1, 0),
+         check_fever = ifelse(symptoms_fever == ans_symptoms_fever, 1, 0),
+         sum_check = rowSums(across(check_fatigue:check_fever))) %>% 
+  select(treat_rand1, disgust, anxious, sum_check)
+
+data_h1 %>% 
+  drop_na() %>% 
+  mutate(across(treat_rand1:sum_check, as.numeric)) %>% 
+  pivot_longer(cols = disgust:anxious, names_to = "type", values_to = "value") %>% 
+  ggplot(aes(x = value, y = sum_check, color = type)) +
+    geom_jitter() +
+    facet_wrap("type")
+```
+
+
 
 ##Question 4: DATA SCIENCE QUESTION
 ###Part a
@@ -218,12 +303,40 @@ As we have spoken about in class, using indexes of multiple measures aimed at a 
 $$ \alpha = \frac{N\times\sum c}{\sum v + (N-1)\times\sum c} $$
 Where $N$ is the number of items in the index, $\sum c$ is the sum of the covariances for item pairs, and $\sum v$ is the sum of the variance for the items. **Using the formula calculate Cronbach's alpha for the disgust index and the anxiety indexes used in the paper.** 
 
+Disgust: disgust, gross, repulsed
+Anxious: afraid, anxious, worried
+
+```{r}
+data_clean4 <- data_clean %>% 
+  drop_na() %>% 
+  mutate(across(treat_rand1:symptom_check, as.numeric))
+
+sum_cov <- sum(cov(data_clean4$disgust, data_clean4$gross), cov(data_clean4$disgust, data_clean4$repulsed), cov(data_clean4$gross, data_clean4$repulsed))
+
+sum_var <- sum(var(data_clean4$disgust), var(data_clean4$gross), var(data_clean4$repulsed))
+
+alpha_disgust <- (3 * sum_cov)/(sum_var + (2 * sum_cov))
+
+sum_cov <- sum(cov(data_clean4$afraid, data_clean4$anxious), cov(data_clean4$afraid, data_clean4$worried), cov(data_clean4$anxious, data_clean4$worried))
+
+sum_var <- sum(var(data_clean4$afraid), var(data_clean4$anxious), var(data_clean4$worried))
+
+alpha_anxious <- (3 * sum_cov)/(sum_var + (2 * sum_cov))
+
+alpha_disgust
+alpha_anxious
+```
+
+
 ###Part b
 In R, one can use the function cronbach.alpha() from the ltm package. Generally scales or indices with a Cronbach's alpha below 0.7 are considered insufficiently internally consistent for use. **Calculate Cronbach's alpha for the disgust index and the anxiety indexes using the function in R. Does this match your previous calculation? Are each of the scales sufficiently internally consistent?**
 
 ```{r, error=TRUE}
 install.packages("ltm")
 library(ltm)
+
+
+
 ```
 
 

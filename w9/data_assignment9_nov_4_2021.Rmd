@@ -276,6 +276,11 @@ answers_clean <- answers %>%
 
 data_h1 <- data_clean %>% 
   left_join(answers_clean, by = "treat_rand1") %>% 
+  
+  # Check which symptoms were identified against the correct symptoms per the
+  # treatment. NOTE: The actual study only checks if the 2 symptoms were
+  # recalled, not if the respondent indicated more symptoms than were listed.
+  
   mutate(check_fatigue = ifelse(symptoms_fatigue == ans_symptoms_fatigue, 1, 0),
          check_headaches = ifelse(symptoms_headaches == ans_symptoms_headaches, 1, 0),
          check_diarrhea = ifelse(symptoms_diarrhea == ans_symptoms_diarrhea, 1, 0),
@@ -284,15 +289,75 @@ data_h1 <- data_clean %>%
          check_warts = ifelse(symptoms_warts == ans_symptoms_warts, 1, 0),
          check_fever = ifelse(symptoms_fever == ans_symptoms_fever, 1, 0),
          sum_correct = rowSums(across(check_fatigue:check_fever))) %>% 
-  select(-contains(c("symptom", "check"))) %>% 
-  mutate(across(treat_rand1:sum_correct, as.numeric))
+  
+  # Add disgust indicator variable (low for treatments 1-2, high for treatments
+  # 3-4). NOTE: check_symptoms is coded so the analysis matches the study --
+  # check_symptoms is 1 if respondent identifies both symptoms present in the
+  # condition, 0 if they don't.
+  
+  mutate(disgust_condition = ifelse(treat_rand1 < 3, "low", "high"),
+         check_symptoms = ifelse(treat_rand1 < 3, 
+                                 ifelse(symptoms_headaches == ans_symptoms_headaches 
+                                        & symptoms_joint == ans_symptoms_joint, 1, 0),
+                                 ifelse(symptoms_diarrhea == ans_symptoms_diarrhea 
+                                        & symptoms_boils == ans_symptoms_boils, 1, 0))) %>% 
+  
+  # Add mean emotional reaction based on disgust and anxiety indecies
+  
+  mutate(mean_disgust = (disgust + gross + repulsed) / 3,
+         mean_anxious = (anxious + afraid + worried) / 3)
+
+
+  # # select(-contains(c("symptom", "check"))) %>% 
+  # mutate(across(treat_rand1:sum_correct, as.numeric))
+```
+
+
+```{r}
+# Check that the differences in recall between high and low disgust are
+# significant 
 
 data_h1 %>% 
-  drop_na() %>% 
-  pivot_longer(cols = disgust:worried, names_to = "type", values_to = "value") %>% 
+  group_by(disgust_condition) %>% 
+  summarize(count = n(),
+            check_symptoms = sum(check_symptoms) / n(),
+            sum_correct = sum(sum_correct) / (n() * 7))
+
+# Difference between disgust conditions is significant for check_symptoms but
+# not sum_correct
+
+t.test(data_h1$check_symptoms[data_h1$disgust_condition == "low"], data_h1$check_symptoms[data_h1$disgust_condition == "high"])
+t.test(data_h1$sum_correct[data_h1$disgust_condition == "low"], data_h1$sum_correct[data_h1$disgust_condition == "high"])
+
+
+data_h1 %>% 
+  select(disgust_condition, mean_disgust, mean_anxious, check_symptoms, sum_correct) %>% 
+  group_by(disgust_condition)
+  
+
+                                 
+data_h1 %>%
+  drop_na() %>%
+  pivot_longer(cols = disgust:worried, names_to = "type", values_to = "value") %>%
   ggplot(aes(x = value, y = sum_correct, color = type)) +
-    geom_jitter() +
-    facet_wrap("type")
+    geom_jitter(size = 0.8) +
+    facet_wrap("type") +
+    theme_light() +
+    theme(legend.position = "none") +
+    labs(x = "Level of emotional reaction", y = "Symptoms identified correctly")
+
+data_h1 %>% 
+  select(disgust_condition, mean_disgust, mean_anxious, check_symptoms, sum_correct) %>% 
+  rename(disgust = mean_disgust, anxious = mean_anxious) %>% 
+  pivot_longer(cols = c(disgust, anxious), names_to = "index", values_to = "values") %>% 
+  filter(check_symptoms == 1, index == "disgust") %>% 
+  ggplot(aes(x = values, fill = disgust_condition)) +
+    geom_density(color = NA, alpha = 0.8) +
+    theme_light() +
+    labs(x = "Reported level of disgust", y = "Density", 
+         title = "Correct symptom identification by reported level of disgust") +
+    scale_fill_discrete(name = "Treatment", 
+                         labels = c("high" = "High disgust", "low" = "Low disgust"))
 ```
 
 
@@ -355,22 +420,28 @@ Create a multivariate regression model for an outcome variable of your choosing.
 ```{r}
 data_4c <- data_h1 %>% 
   drop_na() %>% 
-  mutate(mean_disgust = (disgust + gross + repulsed) / 3,
-         mean_anxious = (anxious + afraid + worried) / 3) %>% 
-  select(treat_rand1, requested_more, sum_correct, mean_disgust, mean_anxious, page_article_timing:mean_anxious) %>% 
+  # mutate(mean_disgust = (disgust + gross + repulsed) / 3,
+  #        mean_anxious = (anxious + afraid + worried) / 3) %>% 
+  select(treat_rand1, requested_more, sum_correct, check_symptoms, mean_disgust, mean_anxious, page_article_timing:mean_anxious) %>% 
   rename(disgust = mean_disgust, anxious = mean_anxious)
 
 data_4c
 
-m1 <- lm(requested_more ~ disgust + anxious + sum_correct + female, data = data_4c)
+m1 <- lm(requested_more ~ disgust + anxious + check_symptoms + female + ideology, data = data_4c)
 
 # Read time and correct answers are not statistically significant
-m2 <- lm(sum_correct ~ page_article_timing, data = data_4c)
+m2 <- lm(check_symptoms ~ page_article_timing, data = data_4c)
 
-m3 <- lm(sum_correct ~ disgust + anxious, data = data_4c)
+m3 <- lm(check_symptoms ~ disgust + anxious, data = data_4c)
 
-stargazer(m1, m3, type = "text")
+summary(m1)
 ```
+I included the disgust and anxious variables to test the hypotheses the authors presented, but I also added check_symptoms, female, and ideology. I included check_symptoms because I thought respondents who recalled less of the correct symptoms might request information to clarify potential misunderstandings. I also included gender and ideology thinking differences in socialization (socialization due to gender and socialization leading to ideology) might impact someone's desire to seek more information.
+
+The model shows that anxiety and ideology are significantly correlated with requesting more information on TRV — anxiety has a coefficient of 0.12 while ideology has a coefficient of -0.035. Higher feelings of anxiety are correlated with more information search, and liberals are more likely to seek additional information.
+
+The results are consistent with Clifford and Jerrit, who found that increased anxiety was correlated with more information search.
+
 
 
 ###Part d
@@ -381,24 +452,28 @@ You can create coefficient plots using regression coefficients as well. Use the 
 confint(m1)
 
 coef_plot <- as_tibble(confint(m1)) %>% 
-  mutate(variable = c("constant", "disgust", "anxious", "sum_correct", "female"),
-         coef = c(0.151, -0.021, 0.117, -0.018, 0.018)) %>% 
+  mutate(variable = c("constant", "disgust", "anxious", "check_symptoms", "female", "ideology"),
+         coef = c(0.148, -0.019, 0.122, -0.009, 0.025, -0.035)) %>% 
   rename("lower" = `2.5 %`,
          "upper" = `97.5 %`)
   
 coef_plot
 
-level_order <- rev(c("disgust", "anxious", "sum_correct", "female", "constant"))
+level_order <- rev(c("constant", "disgust", "anxious", "check_symptoms", "female", "ideology"))
 
 coef_plot %>%
   pivot_longer(cols = c(upper, lower, coef), names_to = "type", values_to = "values") %>% 
   ggplot(aes(x = factor(variable, level = level_order), y = values)) + 
     geom_line() +
     geom_point(aes(color = ifelse(type == "coef", "red", "blue"))) +
-    coord_flip()
+    geom_hline(yintercept = 0, lty = "dashed") +
+    coord_flip() +
+    theme_light() +
+    labs(x = "", y = "", title = "Regression coefficients with 95% confidence intervals") +
+    scale_color_discrete(name = "", labels = c("red" = "Regression coefficient",
+                                               "blue" = "Upper and lower bounds"))
+    
 ```
-
-
 
 # Emotional Arousal: Disgust
 **Data Details:**

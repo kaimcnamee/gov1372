@@ -20,6 +20,8 @@ library(readxl) # you might need to install the readxl package before loading it
 library(plot.matrix) # you might need to install the plot.matrix package before loading it
 library(sjlabelled) # you might need to install the sjlabelled package before loading it
 library(effsize)
+library(lubridate)
+select <- dplyr::select # clarifies which select is used when multiple packages have select function
 ```
 
 
@@ -66,33 +68,42 @@ NationscapeVars <- full_join(NationscapeVars_1,NationscapeVars_2) %>% # the full
 
 Contextual influences are all about the fleeting events that shift our attitudes and behavior. These can be something we personally experience, like encountering people on the street (Sands 2017) or voting at a school (Berger et al. 2008). But they can also be events we are exposed to by press coverage like Supreme Court decision (Tankard and Paluck 2017) or even emotions evoked by press coverage (as was experimentally modeled by Zeitzoff 2014). For this exercise we will think about events that people in a given state or across the country would plausibly have been exposed to via news coverage. **Think about events that happened between July 2019 and July 2020. Maybe this is something that made national news or maybe it was something that received a lot of coverage in your home state or region. Write down an example or two that you might be interested in considering. Use [Google Trends](https://trends.google.com/trends/?geo=US) to confirm that there was a spike in interest, as demonstrated by an increase in Google searches, in your event and include a screenshot or a hyperlink to your results.** Try entering a relevant search term and then using a "Custom time range" (one of the drop down options instead of the default ""Past 12 months") to make your visualization.
 
-### Example 
-
-The teaching staff were interested in thinking about the effects of the back-to-back mass shootings that took place on August 3 and 4, 2019 in El Paso, Texas and Dayton, Ohio, respectively. A Google Trends [visualization](https://trends.google.com/trends/explore?date=2019-07-01%202019-09-01&geo=US&q=shooting) confirms a dramatic spike in search interest for "shooting" in early August 2019.
-
+Covid: https://trends.google.com/trends/explore?q=covid
+Amazon fires
+Trump impeachment
+2020 election campaigns
 
 ## Question 2
 
 Think about some outcomes of interest to you that might have been affected by the contextual influence of the event that you chose. Look in the Nationscape data for variables that fit your outcomes or are reasonable proxies for those outcomes. The variable names in the data you have loaded are pretty informative, but use the full data folder you downloaded earlier to look in the codebooks for more complete descriptions of the variables and how they are measured. There is a codebook in each week's folder; you can look at any week's codebook to get a sense of the variables that are common across the survey waves. **Make sure that your variables are present in the data for the time period in which you want to look for contextual effects. Present these results in a plot.**
 
-### Example
-
-We might think that news coverage of mass shootings would induce anxiety. Given some of readings last week, we wondered if respondents would become more interested in the news due to anxiety. There aren't any obvious proxies for anxiety, but there are several good variables to gauge political interest (the \texttt{interest} variable) and information seeking (the variables of the form \texttt{news\_sources\_xxxx}). Increases in these variables would be consistent with a noted effect of anxiety on the search for inforamtion.  It also seems plausible that the shootings might elevate the priority people place on crime as an issue worthy of national attention. \texttt{extra\_priorities\_crime} seems appropriate here.
-
-We can check the availability of these data using a heatmap.
+### Heatmap
 
 ```{r}
-heat_data <- NationscapeVars %>% mutate(across(.cols = everything(), as.logical)) %>% select(c(extra_priorities_crime,interest,news_sources_facebook,news_sources_cnn))
-
-plot(t(as.matrix(heat_data)), col = c('red','green'), las = 2) # we're using the plot() function from base R here; it only works this way because we have installed and loaded the plot.matrix package
+heat_data_2 <- NationscapeVars %>% 
+  mutate(across(.cols = everything(), as.logical)) %>% 
+  select(ideo5, interest, right_track, economy_better, extra_priorities_crime, registration, news_sources_cnn,
+         news_sources_fox)
 ```
 
-This isn't the prettiest plot. But it quickly shows us that the political interest and news consumption variables have coverage throughout the data, whereas the crime question was only asked in one week.
+```{r}
+heat_data_2 %>% 
+  mutate(week = row_number()) %>% 
+  pivot_longer(cols = ideo5:news_sources_fox, names_to = "var", values_to = "values") %>%
+  ggplot(aes(x = week, y = var, fill = values)) + 
+    geom_tile(color = "black") +
+    theme_minimal() + 
+    scale_fill_manual(values = c("red", "green"))
+```
 
 
 ## Question 3
 
 **Based on what you have thought about and the data you have found, clearly state a specific research question and a hypothesis. Which channel (or channels) through which situational factors can affect political behavior does your hypothesis implicate? (In class, we talked about rational choice, priming, and emotional channels.)** The research question should not be obvious ahead of time (although you should have a theoretical expectation or competing hypotheses); it should be be descriptive, correlational, or causal in nature; and it should be answerable with the data you have available. Make sure your research question is specific; don't confuse the research question with a broader, motivating question that might be used to get people interested in your topic.
+
+### Research Question
+
+Did the onset of the COVID pandemic lead to an increase in anti-Asian sentiment? I'm also more broadly interested in how media consumption might have affected group favorability -- using the date COVID was declared a pandemic, I'm going to use a regression discontinuity design to measure the contextual effects of COVID on group attitudes, and see how different sources of information might affect attitudes towards Asians. 
 
 ### Example
 
@@ -109,6 +120,15 @@ In academic and professional settings, peer feedback, especially early in a proj
 ## Question 5
 
 No research project exists in a vacuum. As you get ready for your final projects, we want you to practice finding, summarizing, and citing related literature. **Identify at least two academic articles that might provide some background for your research question. List the complete source citations and include links to the articles you found.** Google Scholar (https://scholar.google.com/) or Hollis (https://hollis.harvard.edu/) are good places to look for these.
+
+### References
+
+Tessler, Hannah, Meera Choi, Grace Kao. "The Anxiety of Being Asian American: Hate Crimes and Negative Biases During the COVID-19 Pandemic." American Journal of Criminal Justice 45 (2020): 636–646. https://link.springer.com/article/10.1007/s12103-020-09541-5
+
+Lantz, Brenan, Marin Wenger. "Are Asian Victims Less Likely to Report Hate Crime Victimization to the Police? Implications for Research and Policy in the Wake of the COVID-19 Pandemic." Crime and Delinquency (2021). https://journals.sagepub.com/doi/full/10.1177/00111287211041521
+
+Ren, Jingnqiu, Joe Faegin. "Face mask symbolism in anti-Asian hate crimes." Ethnic and Racial Studies 44 (2020): 746-758. https://www.tandfonline.com/doi/full/10.1080/01419870.2020.1826553 
+
 
 ### Example
 
@@ -128,55 +148,233 @@ Personality and Individual Differences, Volume 186, Part A, (2022). https://doi.
 
 **Read in the data from the weeks surrounding your event of interest and test your hypothesis. This can be something straightforward like a difference-in-means or you can plot a visualization of the data. Just take one of the approaches we have used in class before to get an initial sense for if the data provide evidence of the contextual effects you theorized.** Note that you might have to do a fair bit of data cleaning in order to do this. Pay particular attention to how missing data are coded.
 
+```{r clean, message = FALSE}
+# Reading data with Yao's code in Slack
 
-### Example
-First we will need to load and compile the data for the several weeks surrounding the mass shootings we are investigating.
-```{r}
-# load the weekly survey files
+# Collect he file names and select which ones we want
+file_names_1 <- list.files("Nationscape-DataRelease_WeeklyMaterials_DTA/phase_1_v20200814/") %>% .[1:24]
+file_names_2 <- list.files("Nationscape-DataRelease_WeeklyMaterials_DTA/phase_2_v20200814/") %>% .[1:26]
 
-Jul18 <- read_dta('ns20190718.dta') %>%
-  remove_all_labels() # we need to remove the labels in order for these files to be joined together
-Jul25 <- read_dta('ns20190725.dta')%>%
-  remove_all_labels()
-Aug01 <- read_dta('ns20190801.dta') %>%
-  remove_all_labels()
-Aug08 <- read_dta('ns20190808.dta')%>%
-  remove_all_labels()
-Aug15 <- read_dta('ns20190815.dta')%>%
-  remove_all_labels()
-
-
-# join them all together
-Summer2019 <- full_join(Jul18,Jul25) %>% 
-  full_join(., Aug01) %>%
-  full_join(., Aug08) %>%
-  full_join(., Aug15)
-
-# recode NAs
-Summer2019 <- Summer2019 %>%
-  mutate(across(.cols = everything(), ~na_if(., 999))) %>%
+# Reading in all phase 2 weeks
+phase_1 <- map_dfr(.x = file_names_1, 
+                   ~read_dta(file = str_c("Nationscape-DataRelease_WeeklyMaterials_DTA/phase_1_v20200814/", ., "/", ., ".dta")) %>% 
+                     remove_all_labels()) %>%   
+  mutate(across(.cols = everything(), ~na_if(., 999))) %>% 
   mutate(across(.cols = everything(), ~na_if(., 888)))
+
+phase_2 <- map_dfr(.x = file_names_2, 
+                   ~read_dta(file = str_c("Nationscape-DataRelease_WeeklyMaterials_DTA/phase_2_v20200814/", ., "/", ., ".dta")) %>% 
+                     remove_all_labels()) %>%   
+  mutate(across(.cols = everything(), ~na_if(., 999))) %>% 
+  mutate(across(.cols = everything(), ~na_if(., 888)))
+
+full_data <- full_join(phase_1, phase_2)
+
+groups <- c("group_favorability_asians", "group_favorability_blacks", "group_favorability_whites", "discrimination_women")
+bio <- c("gender", "pid3", "race_ethnicity")
+
+# Use WHO's decleration of COVID as global pandemic as the beginning of the
+# treatment. COVID declared a pandemic on March 11, 2020.
+
+full_data_clean <- full_data %>% 
+  mutate(day_running = as_numeric(date(start_date) - date("2020-03-11")),
+         news = case_when(news_sources_fox < news_sources_cnn ~ "Fox", 
+                          news_sources_fox > news_sources_cnn ~ "CNN",
+                          news_sources_fox + news_sources_cnn == 2 ~ "Both",
+                          T ~ NA_character_), 
+         pid3 = case_when(pid3 == 1 ~ "Democrat",
+                          pid3 == 2 ~ "Republican",
+                          pid3 == 3 ~ "Independent",
+                          T ~ NA_character_)) %>% 
+  select(start_date, day_running, bio, groups, news) %>% 
+  drop_na()
 ```
 
-It might be helpful to create a variable indicating whether observations took place after your event of interest. We do this using the below code.
-```{r}
-# create an indicator variable for surveys administered after the mass shootings
-Summer2019 <- Summer2019 %>%
-  mutate(treated = if_else(start_date > as.Date('2019-08-04'), TRUE, FALSE))
+```{r t-test}
+difference_in_means(formula = group_favorability_asians ~ treated, 
+        data = full_data_clean %>% 
+          mutate(treated = ifelse(day_running < 0, F, T)) %>% 
+          select(group_favorability_asians, treated))
+
+cohen.d(formula = group_favorability_asians ~ treated, 
+        data = full_data_clean %>% 
+          mutate(treated = ifelse(day_running < 0, F, T)) %>% 
+          select(group_favorability_asians, treated))
 ```
 
-As a first cut, we can try a difference in means. Don't forget to check the effect size.
-```{r}
-difference_in_means(interest ~ treated, data = Summer2019 %>% filter(as.Date('2019-07-31') < start_date) %>% filter(start_date < as.Date('2019-08-09')))
-
-cohen.d(interest ~ treated, data = Summer2019 %>% filter(as.Date('2019-07-31') < start_date) %>% filter(start_date < as.Date('2019-08-09')))
-```
-
-Even though there is a statistically significant difference in means, the effect size is negligible. And becuase the Nationscape survey asks different groups of people the same questions every week, some of the change in measured opinion is probably just due to sampling error instead of significant shifts in the population. At least based on this test, there doesn't seem to be evidence supporting our hypothesis. That's ok! It could be because this is a pretty crude test of our theory, or we might just have been wrong. It certainly warrants more investigation, but disconfirming hypotheses is an important part of how science moves forward.
-
+Difference in means shows there is a significant difference in favorability towards asians before and after the shooting, but the effect size is negligible.  
 
 ## Question 7: DATA SCIENCE QUESTION
 
 **Extend your work from the previous question to consider other factors, like the possibility of heterogenous treatment effects, confounding variables, or use a more sophisticated approach to statistical inference, like regression discontinuity in time.**
+
+```{r}
+# group_favorability_asians for all groups
+
+full_data_clean %>% 
+  group_by(day_running) %>% 
+  summarize(group_favorability_asians = mean(group_favorability_asians),
+            .groups = "drop") %>% 
+  mutate(treatment = as.factor(ifelse(day_running < 0, "Before", "After"))) %>% 
+  ggplot(aes(x = day_running, y = group_favorability_asians)) +
+    geom_point(aes(color = treatment), alpha = 0.5, size = 0.5) +
+    geom_smooth(aes(color = treatment), method = "lm", se = F) +
+    theme_light() +
+    labs(title = "Anti-Asian sentiment over time") +
+    scale_color_discrete(name = "", labels = c("Before" = "Before pandemic",
+                                               "After" = "After pandemic")) +
+    geom_vline(xintercept = 0, linetype = "dashed")
+
+#group_favorability_asians by party  
+
+full_data_clean %>% 
+  group_by(day_running, pid3) %>% 
+  summarize(group_favorability_asians = mean(group_favorability_asians),
+            .groups = "drop") %>%
+  mutate(treatment = as.factor(ifelse(day_running < 0, "Before", "After"))) %>% 
+  ggplot(aes(x = day_running, y = group_favorability_asians)) +
+    geom_point(aes(color = treatment), alpha = 0.5, size = 0.5) +
+    geom_smooth(aes(color = treatment), method = "lm", se = F) +
+    facet_wrap("pid3") +
+    theme_light() +
+    labs(title = "Anti-Asian sentiment by party") +
+    scale_color_discrete(name = "", labels = c("Before" = "Before pandemic",
+                                               "After" = "After pandemic")) +
+    geom_vline(xintercept = 0, linetype = "dashed")
+
+#group_favorability_asians by news source  
+
+full_data_clean %>% 
+  group_by(day_running, news) %>% 
+  summarize(group_favorability_asians = mean(group_favorability_asians),
+            .groups = "drop") %>%
+  mutate(treatment = as.factor(ifelse(day_running < 0, "Before", "After"))) %>% 
+  ggplot(aes(x = day_running, y = group_favorability_asians)) +
+    geom_point(aes(color = treatment), alpha = 0.5, size = 0.5) +
+    geom_smooth(aes(color = treatment), method = "lm", se = F) +
+    facet_wrap("news") +
+    theme_light() +    
+    labs(title = "Anti-Asian sentiment by news source") +
+    scale_color_discrete(name = "", labels = c("Before" = "Before pandemic",
+                                               "After" = "After pandemic")) +
+    geom_vline(xintercept = 0, linetype = "dashed")
+
+
+# group_favorability_asians by racial group
+
+full_data_clean %>% 
+  filter(race_ethnicity %in% c(1, 2, seq(4, 11, 1))) %>% 
+  mutate(race_ethnicity = case_when(race_ethnicity == 1 ~ "White",
+                                    race_ethnicity == 2 ~ "Black",
+                                    T ~ "Asian")) %>% 
+  group_by(day_running, race_ethnicity) %>% 
+  summarize(group_favorability_asians = mean(group_favorability_asians),
+            group_favorability_blacks = mean(group_favorability_asians),
+            .groups = "drop") %>%
+  mutate(treatment = as.factor(ifelse(day_running < 0, "Before", "After"))) %>% 
+  ggplot(aes(x = day_running, y = group_favorability_asians)) +
+    geom_point(aes(color = treatment), alpha = 0.5, size = 0.5) +
+    geom_smooth(aes(color = treatment), method = "lm", se = F) +
+    facet_wrap("race_ethnicity") +
+    theme_light() +    
+    labs(title = "Anti-Asian sentiment by racial group") +
+    scale_color_discrete(name = "", labels = c("Before" = "Before pandemic",
+                                               "After" = "After pandemic")) +
+    geom_vline(xintercept = 0, linetype = "dashed")
+
+```
+
+```{r}
+model_data <- full_data_clean %>% 
+  mutate(fox = ifelse(news == "Fox", T, F),
+         treatment = ifelse(day_running < 0, F, T)) %>% 
+  select(day_running, pid3, race_ethnicity, fox, group_favorability_asians, treatment)
+
+m_total <- lm(group_favorability_asians ~ treatment + day_running + fox,
+              data = model_data)
+
+m_before <- lm(group_favorability_asians ~ day_running + fox + fox*day_running,
+                data = model_data %>% filter(day_running < 0))
+
+m_after <- lm(group_favorability_asians ~ day_running + fox + fox*day_running, 
+                data = model_data %>% filter(day_running >= 0))
+
+stargazer(m_total, m_before, m_after, type = "text")
+```
+
+```{r effect-decay}
+# Define prediction range
+pred_data <- data.frame(day_running = seq(-100, 300, 1))
+
+# Define before-pandemic model for people who consume CNN or CNN and Fox.
+m_before <- lm(group_favorability_asians ~ day_running, data = model_data %>% filter(day_running < 0, fox == F))
+
+# Predict using before-pandemic model
+preds_before <- predict(m_before, pred_data, se.fit = T)
+preds_before <- tibble(group_favorability_asians = preds_before$fit,
+                       day_running = pred_data$day_running,
+                       treatment = F)
+
+# Define post-pandemic model for people who consume CNN or CNN and Fox.
+m_after <- lm(group_favorability_asians ~ day_running, data = model_data %>% filter(day_running >= 0, fox == F))
+preds_after <- predict(m_after, pred_data, se.fit = T)
+preds_after <- tibble(group_favorability_asians = preds_after$fit,
+                       day_running = pred_data$day_running,
+                       treatment = T)
+
+# Combine preds
+preds_combined <- rbind(preds_before, preds_after)
+
+# how long does it take for complete effect decay?
+# preds_combined %>% 
+#   pivot_wider(names_from = treatment, values_from = group_favorability_asians) %>% 
+#   mutate(dif = `FALSE`- `TRUE`) %>% 
+#   view()
+
+# Day 91
+
+# Visualize
+preds_combined %>% 
+  ggplot(aes(x = day_running, y = group_favorability_asians, color = treatment)) +
+    geom_path() +
+    geom_vline(xintercept = 91, lty = "dashed")
+```
+```{r effect-decay-fox}
+# Define prediction range
+pred_data <- data.frame(day_running = seq(-100, 300, 1))
+
+# Define before-pandemic model for people who consume CNN or CNN and Fox.
+m_before <- lm(group_favorability_asians ~ day_running, data = model_data %>% filter(day_running < 0, fox == T))
+
+# Predict using before-pandemic model
+preds_before <- predict(m_before, pred_data, se.fit = T)
+preds_before <- tibble(group_favorability_asians = preds_before$fit,
+                       day_running = pred_data$day_running,
+                       treatment = F)
+
+# Define post-pandemic model for people who consume CNN or CNN and Fox.
+m_after <- lm(group_favorability_asians ~ day_running, data = model_data %>% filter(day_running >= 0, fox == T))
+preds_after <- predict(m_after, pred_data, se.fit = T)
+preds_after <- tibble(group_favorability_asians = preds_after$fit,
+                       day_running = pred_data$day_running,
+                       treatment = T)
+
+# Combine preds
+preds_combined <- rbind(preds_before, preds_after)
+
+# how long does it take for complete effect decay?
+# preds_combined %>%
+#   pivot_wider(names_from = treatment, values_from = group_favorability_asians) %>%
+#   mutate(dif = `FALSE`- `TRUE`) %>%
+#   view()
+# 
+# Day 133
+
+# Visualize
+preds_combined %>% 
+  ggplot(aes(x = day_running, y = group_favorability_asians, color = treatment)) +
+    geom_path() +
+    geom_vline(xintercept = 133, lty = "dashed")
+```
 
 

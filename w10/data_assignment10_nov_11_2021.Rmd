@@ -1,6 +1,6 @@
 ---
 title: 'Data Exploration: Contextual Influences'
-author: "Your name here"
+author: "Kai McNamee"
 date: "November 11, 2021"
 output:
   pdf_document: default

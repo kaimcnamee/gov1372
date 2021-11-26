@@ -11,6 +11,9 @@
 !*/
 
 # Recursively allow files under subtree
+!/final/**.Rmd
+!/final/**.pdf
+
 !/w1/**.Rmd
 !/w1/**.pdf
 

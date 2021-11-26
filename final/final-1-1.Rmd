@@ -1,0 +1,201 @@
+---
+title: "final-1-1"
+author: "Kai McNamee"
+date: "11/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(estimatr)
+library(haven)
+library(stargazer)
+library(lubridate)
+library(sjlabelled)
+library(latticeExtra)
+```
+
+Use nationscape data with state -- is it a state level condition thing?
+
+```{r read-data message=FALSE}
+### Nationscape data
+# Collect the file names and select which ones we want
+
+file_names_1 <- list.files("data/Nationscape-DataRelease_WeeklyMaterials_DTA/phase_1_v20200814/") %>% .[1:24]
+file_names_2 <- list.files("data/Nationscape-DataRelease_WeeklyMaterials_DTA/phase_2_v20200814/") %>% .[1:26]
+
+# Reading in all phase 1 and 2 weeks
+
+phase_1 <- map_dfr(.x = file_names_1, 
+                   ~read_dta(file = str_c("data/Nationscape-DataRelease_WeeklyMaterials_DTA/phase_1_v20200814/", ., "/", ., ".dta")) %>% 
+                     remove_all_labels()) %>%   
+  mutate(across(.cols = everything(), ~na_if(., 999))) %>% 
+  mutate(across(.cols = everything(), ~na_if(., 888)))
+
+phase_2 <- map_dfr(.x = file_names_2, 
+                   ~read_dta(file = str_c("data/Nationscape-DataRelease_WeeklyMaterials_DTA/phase_2_v20200814/", ., "/", ., ".dta")) %>% 
+                     remove_all_labels()) %>%   
+  mutate(across(.cols = everything(), ~na_if(., 999))) %>% 
+  mutate(across(.cols = everything(), ~na_if(., 888)))
+
+# Join phase 1 and 2
+
+ns_joined <- full_join(phase_1, phase_2)
+
+# Select variables
+
+ns_vars <- c(party = "pid3", 
+             gender = "gender",
+             race = "race_ethnicity",
+             state = "state",
+             fox = "news_sources_fox",
+             cnn = "news_sources_cnn",
+             asians = "group_favorability_asians")
+
+ns_selected <- ns_joined %>% 
+  select(response_id, start_date, ns_vars) %>% 
+  mutate(party = case_when(party == 1 ~ "Democrat",
+                           party == 2 ~ "Republican",
+                           party == 3 ~ "Independent",
+                           T ~ NA_character_),
+         start_date = as_date(start_date)) %>% 
+  rename(date = start_date)
+
+### Covid data
+# Read covid data from
+# https://data.cdc.gov/Case-Surveillance/United-States-COVID-19-Cases-and-Deaths-by-State-o/9mfq-cb36
+
+covid_states <- read_csv("data/United_States_COVID-19_Cases_and_Deaths_by_State_over_Time.csv", 
+                         col_types = cols(.default = col_guess())) %>% 
+  rename(date = submission_date) %>%
+  mutate(date = as_date(mdy(date))) %>% 
+  filter(date < as_date("2020-08-01)")) %>%
+  select(date, state, tot_cases)
+
+### Lockdown data
+# Read lockdown data from https://www.nytimes.com/interactive/2020/us/coronavirus-stay-at-home-order.html
+
+lockdowns <- read_csv("data/nyt_stay_at_home.csv", col_types = cols(.default = col_guess())) %>% 
+  select(Abbreviation, Date) %>% 
+  rename(start_date = Date, state = Abbreviation) %>% 
+  mutate(start_date = as_date(mdy(start_date)))
+```
+
+```{r dual-axis}
+# Compare trends in attitudes towards asians and covid cases
+
+cutoff <- as_date("2020-07-01")
+
+ns_month <- ns_selected %>% 
+  mutate(month_year = as_date(my(paste0(month(date), "-", year(date))))) %>% 
+  select(month_year, asians) %>% 
+  drop_na() %>% 
+  group_by(month_year) %>%
+  summarize(asians = mean(asians), .groups = "drop") %>% 
+  filter(month_year < cutoff)
+  # ggplot(aes(x = month_year, y = asians)) +
+  #   geom_point()
+
+covid_month <- covid_states %>% 
+  mutate(month_year = as_date(my(paste0(month(date), "-", year(date))))) %>% 
+  select(month_year, tot_cases) %>% 
+  group_by(month_year) %>% 
+  summarize(tot_cases = sum(tot_cases), .groups = "drop") %>% 
+  filter(month_year < cutoff)
+  # ggplot(aes(x = month_year, y = tot_cases)) +
+  #   geom_point()
+
+obj1 <- xyplot(asians ~ month_year, data = ns_month, typ = "l", lwd = 2, col="red")
+obj2 <- xyplot(tot_cases ~ month_year, data = covid_month, typ = "l", lwd = 2, col="blue")
+doubleYScale(obj1, obj2, add.ylab2 = TRUE, use.style=FALSE )
+
+
+ns_month
+covid_month
+```
+
+Notes
+NS data is only collected on specific days that the survey is administered -- covid data is collected on different days. Does that mean I have to model covid data to get the number of cases for every day of the NS survey? (how to fill in the gaps??)
+
+(This is actually wrong -- covid data exists for every day that survey data is collected)
+
+```{r clean}
+joined_data <- ns_selected %>% 
+  left_join(covid_states %>% 
+              group_by(date) %>% 
+              summarize(tot_cases = sum(tot_cases), .groups = "drop"), 
+            by = "date") %>% 
+  # mutate(tot_cases = ifelse(is.na(tot_cases) == TRUE, 0, tot_cases)) %>% 
+  
+  # Join lockdown data. 
+  
+  left_join(lockdowns, by = "state") %>% 
+    
+  # For case_when: 
+  # 1. code lockdown as NA if the observation is before the pandemic started (ie when tot_cases == NA)
+  # 2. code lockdown as FALSE if the respondent's state never implemented a
+  #     lockdown (ie when tot_cases =/= NA, but lockdown start_date == NA)
+  # 3. code lockdown as FALSE if the response is before the respondent's state
+  #     implmented a lockdown (ie when tot_cases =/= NA, and lockdown start_date =/=
+  #     NA)
+  # 4. otherwise, code lockdown as TRUE (ie when tot_cases =/= NA, lockdown
+  #     start_date =/= NA, and response date is after lockdown start_date)
+  
+  mutate(lockdown = case_when(is.na(tot_cases) == TRUE ~ NA, 
+                              is.na(start_date) == TRUE ~ FALSE, 
+                              date < start_date ~ FALSE,
+                              T ~ TRUE)) %>% 
+  drop_na(asians)
+  
+  
+  
+  
+  # check join
+  drop_na() %>% 
+  ggplot(aes(x = date)) +
+    geom_point(aes(y = asians), color = "red") +
+    geom_point(aes(y = tot_cases))
+
+
+
+```
+
+
+```{r}
+# covid_date <- covid_states %>% 
+#   group_by(date) %>% 
+#   summarize(tot_cases = sum(tot_cases), .groups = "drop")
+
+ns_selected %>% 
+  drop_na() %>% 
+  group_by(date) %>% 
+  summarize(asians = mean(asians), .groups = "drop") %>% 
+  left_join(covid_states %>% 
+              group_by(date) %>% 
+              summarize(tot_cases = sum(tot_cases), .groups = "drop"), 
+            by = "date") %>% 
+  filter(date >= as_date("2020-01-22")) %>% 
+
+  pivot_longer(cols = c(asians, tot_cases), names_to = "series", values_to = "values") %>% 
+  ggplot(aes(x = date, y = values, color = series)) +
+    geom_point(size = 0.5) +
+    facet_wrap("series", scales = "free_y")
+  
+  
+  
+  
+
+
+
+  ggplot(aes(x = date, y = values, color = series)) +
+    geom_point() +
+
+```
+```{r}
+m1 <- lm(asians ~ tot_cases, joined)
+summary(m1)
+```
+
+
+

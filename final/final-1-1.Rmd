@@ -18,6 +18,8 @@ library(latticeExtra)
 
 Use nationscape data with state -- is it a state level condition thing?
 
+NOTES: add a column for 
+
 ```{r read-data message=FALSE}
 ### Nationscape data
 # Collect the file names and select which ones we want
@@ -70,8 +72,8 @@ covid_states <- read_csv("data/United_States_COVID-19_Cases_and_Deaths_by_State_
                          col_types = cols(.default = col_guess())) %>% 
   rename(date = submission_date) %>%
   mutate(date = as_date(mdy(date))) %>% 
-  filter(date < as_date("2020-08-01)")) %>%
-  select(date, state, tot_cases)
+  filter(date < as_date("2020-08-01)")) %>% 
+  select(date, state, tot_cases, new_case, tot_death, new_death)
 
 ### Lockdown data
 # Read lockdown data from https://www.nytimes.com/interactive/2020/us/coronavirus-stay-at-home-order.html
@@ -121,10 +123,18 @@ NS data is only collected on specific days that the survey is administered -- co
 (This is actually wrong -- covid data exists for every day that survey data is collected)
 
 ```{r clean}
+
+# NOTE: join is happening for group_by(date) totals --> do this join again such
+# that each observation has US cases and state cases for respondents' state!!!
+
 joined_data <- ns_selected %>% 
   left_join(covid_states %>% 
               group_by(date) %>% 
-              summarize(tot_cases = sum(tot_cases), .groups = "drop"), 
+              summarize(tot_cases = sum(tot_cases),
+                        new_case = sum(new_case),
+                        tot_death = sum(tot_death),
+                        new_death = sum(new_death),
+                        .groups = "drop"), 
             by = "date") %>% 
   # mutate(tot_cases = ifelse(is.na(tot_cases) == TRUE, 0, tot_cases)) %>% 
   
@@ -147,54 +157,81 @@ joined_data <- ns_selected %>%
                               date < start_date ~ FALSE,
                               T ~ TRUE)) %>% 
   drop_na(asians)
-  
-  
-  
-  
-  # check join
-  drop_na() %>% 
-  ggplot(aes(x = date)) +
-    geom_point(aes(y = asians), color = "red") +
-    geom_point(aes(y = tot_cases))
 
-
-
+covid_date <- covid_states %>%
+  group_by(date) %>%
+  summarize(tot_cases = sum(tot_cases), .groups = "drop")
 ```
 
 
-```{r}
-# covid_date <- covid_states %>% 
+```{r initial-viz}
+# ns_selected %>% 
+#   drop_na() %>% 
 #   group_by(date) %>% 
-#   summarize(tot_cases = sum(tot_cases), .groups = "drop")
+#   summarize(asians = mean(asians), .groups = "drop") %>% 
+#   left_join(covid_states %>% 
+#               group_by(date) %>% 
+#               summarize(tot_cases = sum(tot_cases), .groups = "drop"), 
+#             by = "date") %>% 
+#   filter(date >= as_date("2020-01-22"))
+  
 
-ns_selected %>% 
-  drop_na() %>% 
+# group_favorability_asians plot
+
+joined_data %>% 
+  drop_na(asians) %>% 
   group_by(date) %>% 
-  summarize(asians = mean(asians), .groups = "drop") %>% 
-  left_join(covid_states %>% 
-              group_by(date) %>% 
-              summarize(tot_cases = sum(tot_cases), .groups = "drop"), 
-            by = "date") %>% 
-  filter(date >= as_date("2020-01-22")) %>% 
+  summarize(asians = mean(asians),
+            tot_cases = mean(tot_cases), .groups = "drop") %>%
+  ggplot(aes(x = date, y = asians)) +
+    geom_point(color = "#f8766d") + 
+    geom_smooth(color = "#f8766d", method = "loess", formula = y ~ x) +
+    theme_minimal() +
+    labs(title = "Favorability towards Asians over time",
+         x = "", y = "Favorability towards Asians") +
+    scale_x_date(date_labels = "%B-%Y")
 
+# tot_cases plot
+
+joined_data %>% 
+  drop_na(tot_cases) %>% 
+  group_by(date) %>% 
+  summarize(asians = mean(asians),
+            tot_cases = mean(tot_cases), .groups = "drop") %>%
+  ggplot(aes(x = date, y = tot_cases)) +
+    geom_point(color = "#00bfc4") + 
+    theme_minimal() +
+    labs(title = "Total COVID cases over time",
+         x = "", y = "Total COVID cases") +
+    scale_x_date(date_labels = "%b-%Y")
+
+labels <- c("asians" = "Favorability towards Asians", 
+            "tot_cases" = "Total cases")
+
+joined_data %>% 
+  drop_na(asians, tot_cases) %>% 
+  group_by(date) %>% 
+  summarize(asians = mean(asians),
+            tot_cases = mean(tot_cases), .groups = "drop") %>% 
   pivot_longer(cols = c(asians, tot_cases), names_to = "series", values_to = "values") %>% 
   ggplot(aes(x = date, y = values, color = series)) +
     geom_point(size = 0.5) +
-    facet_wrap("series", scales = "free_y")
-  
-  
-  
-  
-
-
-
-  ggplot(aes(x = date, y = values, color = series)) +
-    geom_point() +
-
+    facet_wrap("series", scales = "free_y", labeller = as_labeller(labels)) +
+    scale_x_date(date_labels = "%b-%Y") +
+    scale_color_discrete(labels = as_labeller(labels), name = "") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, vjust = 0.5)) +
+    labs(title = "", x = "", y = "") 
 ```
+
 ```{r}
-m1 <- lm(asians ~ tot_cases, joined)
-summary(m1)
+m1 <- lm(asians ~ date + tot_cases + new_case + tot_death + new_death + state + lockdown, joined_data %>% drop_na(tot_cases))
+summary(m2)
+
+m2 <- lm(asians ~ date + tot_cases + tot_death + lockdown, joined_data %>% drop_na(tot_cases))
+m3 <- lm(asians ~ date + new_case + new_death + lockdown, joined_data %>% drop_na(tot_cases))
+stargazer(m2, m3, type = "text")
+
 ```
 
 

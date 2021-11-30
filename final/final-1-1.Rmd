@@ -14,6 +14,8 @@ library(stargazer)
 library(lubridate)
 library(sjlabelled)
 library(latticeExtra)
+library(gtrendsR)
+library(janitor)
 ```
 
 Use nationscape data with state -- is it a state level condition thing?
@@ -61,6 +63,8 @@ ns_selected <- ns_joined %>%
                            party == 2 ~ "Republican",
                            party == 3 ~ "Independent",
                            T ~ NA_character_),
+         fox = ifelse(fox == 1, TRUE, FALSE),
+         cnn = ifelse(cnn == 1, TRUE, FALSE),
          start_date = as_date(start_date)) %>% 
   rename(date = start_date)
 
@@ -82,6 +86,65 @@ lockdowns <- read_csv("data/nyt_stay_at_home.csv", col_types = cols(.default = c
   select(Abbreviation, Date) %>% 
   rename(start_date = Date, state = Abbreviation) %>% 
   mutate(start_date = as_date(mdy(start_date)))
+
+### Gtrends data
+# Read in Google trends data related to the pandemic
+
+keywords = c("china virus", "china", "covid", "coronavirus")
+
+gtrends <- gtrends(keyword = keywords,
+                   geo = "US",
+                   gprop = "web",
+                   time = "2020-01-22 2020-07-02")
+
+# trends time series 
+
+search_time <- covid_search$interest_over_time %>% 
+  mutate(hits = as.numeric(replace(hits, hits == "<1", 0))) %>% 
+  pivot_wider(names_from = keyword, values_from = hits) %>% 
+  clean_names() %>% 
+  select(-(geo:category))
+
+# Trends by state
+# For state data over time, call the gtrends function for every 2 day pair in
+# the date range.
+
+dates <- tibble(date_pair = paste(seq(as_date("2020-01-22"), as_date("2020-07-02"), "days"), 
+                                   seq(as_date("2020-01-23"), as_date("2020-07-03"), "days"))) %>% 
+  mutate(call_group = row_number())
+
+# test <- map(.x = dates$date_pair, ~gtrends(keyword = keywords, geo = "US", gprop = "web", time = as_character(.)))
+# search_state <- test
+# saveRDS(search_state, "gtrends_state.RDS")
+
+# Unnest the list object gtrends() outputs
+
+search_state <- map_dfr(.x = seq(1, 163, 1), ~search_state[[.]]$interest_by_region)
+
+# Clean the data and match calls with dates
+
+search_state_clean <- search_state %>%
+  mutate(call_group = rep(seq(1, 163, 1), each = 204)) %>% 
+  group_by(call_group) %>% 
+  pivot_wider(names_from = keyword, values_from = hits) %>% 
+  clean_names() %>% 
+  left_join(dates, by = "call_group") %>% 
+  separate(col = date_pair, into = c("start_date", "end_date"), sep = "\\s") %>% 
+  mutate(date = as_date(start_date),
+         end_date = as_date(end_date)) %>% 
+  select(-start_date, -end_date)
+
+# Join search_sate_clean with state abbreviations so it can be joined with
+# joined_data
+
+state_abbreviations <- tibble(location = state.name) %>%
+   bind_cols(tibble(state = state.abb)) %>% 
+   bind_rows(tibble(location = "District of Columbia", state = "DC"))
+
+search_state_clean <- search_state_clean %>% 
+  left_join(state_abbreviations, by = "location")
+
+# saveRDS(search_state_clean, "search_state_clean.RDS")
 ```
 
 ```{r dual-axis}
@@ -117,17 +180,20 @@ ns_month
 covid_month
 ```
 
-Notes
-NS data is only collected on specific days that the survey is administered -- covid data is collected on different days. Does that mean I have to model covid data to get the number of cases for every day of the NS survey? (how to fill in the gaps??)
-
-(This is actually wrong -- covid data exists for every day that survey data is collected)
-
 ```{r clean}
-
-# NOTE: join is happening for group_by(date) totals --> do this join again such
-# that each observation has US cases and state cases for respondents' state!!!
-
 joined_data <- ns_selected %>% 
+  
+  # Join observations with state-level covid data
+  
+  left_join(covid_states %>% 
+              rename(state_tot_cases = tot_cases,
+                     state_new_case = new_case, 
+                     state_tot_death = tot_death,
+                     state_new_death = new_death), by = c("date", "state")) %>% 
+  
+  # Join observations with national covid data (group by date and sum cases
+  # before join)
+  
   left_join(covid_states %>% 
               group_by(date) %>% 
               summarize(tot_cases = sum(tot_cases),
@@ -156,6 +222,12 @@ joined_data <- ns_selected %>%
                               is.na(start_date) == TRUE ~ FALSE, 
                               date < start_date ~ FALSE,
                               T ~ TRUE)) %>% 
+  left_join(search_state_clean, by = c("state", "date")) %>% 
+  rename(search_china_virus = china_virus,
+         search_china = china,
+         search_covid = covid, 
+         search_coronavirus = coronavirus) %>% 
+  select(-c(location, geo, gprop, call_group)) %>% 
   drop_na(asians)
 
 covid_date <- covid_states %>%
@@ -164,7 +236,7 @@ covid_date <- covid_states %>%
 ```
 
 
-```{r initial-viz}
+```{r cases-viz}
 # ns_selected %>% 
 #   drop_na() %>% 
 #   group_by(date) %>% 
@@ -223,15 +295,36 @@ joined_data %>%
     theme(axis.text.x = element_text(angle = 45, vjust = 0.5)) +
     labs(title = "", x = "", y = "") 
 ```
+```{r gtrends-viz}
+search_state_clean %>% 
+  pivot_longer(cols = c("china_virus", "china", "covid", "coronavirus"),
+               names_to = "keyword", values_to = "hits") %>% 
+  filter(keyword == "coronavirus") %>% 
+  ggplot(aes(x = start_date, y = hits, color = location)) +
+    geom_line() +
+    facet_wrap("location")
 
-```{r}
-m1 <- lm(asians ~ date + tot_cases + new_case + tot_death + new_death + state + lockdown, joined_data %>% drop_na(tot_cases))
-summary(m2)
+joined_data %>% 
+  filter(is.na(tot_cases) == F) %>% 
+  group_by(search_coronavirus) %>% 
+  summarize(asians = mean(asians)) %>% 
+  ggplot(aes(x = search_coronavirus, y = asians)) +
+    geom_point()
+
+```
+
+
+
+```{r models}
+m1 <- lm(asians ~ fox + cnn + party + date + tot_cases + new_case + tot_death + new_death + state + lockdown, joined_data %>% drop_na(tot_cases))
+summary(m1)
 
 m2 <- lm(asians ~ date + tot_cases + tot_death + lockdown, joined_data %>% drop_na(tot_cases))
 m3 <- lm(asians ~ date + new_case + new_death + lockdown, joined_data %>% drop_na(tot_cases))
-stargazer(m2, m3, type = "text")
+stargazer(m2, m3, m4, type = "text")
 
+m4 <- lm(asians ~ date + party + cnn + fox, joined_data %>% drop_na(tot_cases))
+summary(m4)
 ```
 
 

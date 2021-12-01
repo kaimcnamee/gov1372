@@ -16,12 +16,11 @@ library(sjlabelled)
 library(latticeExtra)
 library(gtrendsR)
 library(janitor)
+
+# Mapping
+library(tidycensus)
+library(sf)
 ```
-
-Use nationscape data with state -- is it a state level condition thing?
-
-NOTES: add a column for 
-
 ```{r read-data message=FALSE}
 ### Nationscape data
 # Collect the file names and select which ones we want
@@ -305,23 +304,97 @@ search_state_clean %>%
     facet_wrap("location")
 
 joined_data %>% 
-  filter(is.na(tot_cases) == F) %>% 
-  group_by(search_coronavirus) %>% 
-  summarize(asians = mean(asians)) %>% 
-  ggplot(aes(x = search_coronavirus, y = asians)) +
-    geom_point()
+  drop_na() %>% 
+  pivot_longer(cols = c(search_china_virus, search_china, search_covid, search_coronavirus), 
+               names_to = "keyword", values_to = "hits") %>% 
+  group_by(keyword, hits) %>% 
+  summarize(asians = mean(asians), .groups = "drop") %>% 
+  ggplot(aes(x = hits, y = asians, color = keyword)) +
+    geom_point() +
+    facet_wrap("keyword")
+  
+joined_data %>% 
+  drop_na() %>% 
+  pivot_longer(cols = c(search_china_virus, search_china, search_covid, search_coronavirus), 
+               names_to = "keyword", values_to = "hits") %>% 
+  group_by(keyword, hits, state) %>% 
+  summarize(asians = mean(asians), .groups = "drop")
 
 ```
 
 
+```{r gtrends-map}
+state_geometry <- get_acs(geography = "state",
+                        variables = "B01001_001",
+                        year = 2017,
+                        geometry = TRUE,
+                        shift_geo = TRUE,
+                        summary_var = "B01001_001") %>% 
+  st_transform(crs = 4326) %>% 
+  clean_names() %>% 
+  left_join(state_abbreviations, by = c("name" = "location")) %>% 
+  select(state, geometry)
+
+joined_geometry <- joined_data %>%
+  drop_na(asians, search_coronavirus, search_china, search_china_virus, 
+          search_covid) %>% 
+  group_by(state) %>% 
+  summarize(asians = mean(asians),
+            search_coronavirus = mean(search_coronavirus), 
+            search_china = mean(search_china),
+            search_china_virus = mean(search_china_virus),
+            search_covid = mean(search_covid), .groups = "drop") %>% 
+  left_join(state_geometry, by = "state")
+
+joined_geometry %>% 
+  ggplot(aes(fill = asians, geometry = geometry)) +
+    geom_sf(size = 0.5, 
+            color = ifelse(joined_geometry$state %in% c("AK", "HI"), NA, "white")) +
+    theme_void() + 
+    theme(legend.position = "bottom") 
+
+joined_geometry %>% 
+  ggplot(aes(fill = search_covid, geometry = geometry)) +
+    geom_sf(size = 0.5, 
+            color = ifelse(joined_geometry$state %in% c("AK", "HI"), NA, "white")) +
+    theme_void() + 
+    theme(legend.position = "bottom") 
+
+joined_geometry %>% 
+  ggplot(aes(fill = search_coronavirus, geometry = geometry)) +
+    geom_sf(size = 0.5, 
+            color = ifelse(joined_geometry$state %in% c("AK", "HI"), NA, "white")) +
+    theme_void() + 
+    theme(legend.position = "bottom") 
+
+joined_geometry %>% 
+  ggplot(aes(fill = search_china, geometry = geometry)) +
+    geom_sf(size = 0.5, 
+            color = ifelse(joined_geometry$state %in% c("AK", "HI"), NA, "white")) +
+    theme_void() + 
+    theme(legend.position = "bottom") 
+
+joined_geometry %>% 
+  ggplot(aes(fill = search_china_virus, geometry = geometry)) +
+    geom_sf(size = 0.5, 
+            color = ifelse(joined_geometry$state %in% c("AK", "HI"), NA, "white")) +
+    theme_void() + 
+    theme(legend.position = "bottom") 
+```
+
+
+
 
 ```{r models}
-m1 <- lm(asians ~ fox + cnn + party + date + tot_cases + new_case + tot_death + new_death + state + lockdown, joined_data %>% drop_na(tot_cases))
+m1 <- lm(asians ~ fox + cnn + party + date + tot_cases + new_case + tot_death + new_death + state + lockdown + search_coronavirus + search_china_virus, joined_data %>% drop_na(tot_cases))
 summary(m1)
 
-m2 <- lm(asians ~ date + tot_cases + tot_death + lockdown, joined_data %>% drop_na(tot_cases))
-m3 <- lm(asians ~ date + new_case + new_death + lockdown, joined_data %>% drop_na(tot_cases))
-stargazer(m2, m3, m4, type = "text")
+m_totals <- lm(asians ~ date + tot_cases + tot_death + lockdown, joined_data %>% drop_na(tot_cases))
+m_new <- lm(asians ~ date + new_case + new_death + lockdown, joined_data %>% drop_na(tot_cases))
+m_search <- lm(asians ~ search_china + search_covid + search_coronavirus + search_china_virus, joined_data %>% drop_na(tot_cases))
+
+
+stargazer(m_totals, m_new, m_search, type = "text")
 
 m4 <- lm(asians ~ date + party + cnn + fox, joined_data %>% drop_na(tot_cases))
 summary(m4)

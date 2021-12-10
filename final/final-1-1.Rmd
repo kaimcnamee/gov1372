@@ -214,6 +214,13 @@ covid_month
 
 ```{r clean}
 joined_data <- ns_selected %>% 
+  mutate(race = case_when(race == 1 ~ "white", 
+                          race == 2 ~ "black",
+                          race == 3 ~ "american_indian",
+                          race %in% seq(4, 10, 1) ~ "asian",
+                          race %in% c(11, 12, 13, 14) ~ "pacific_islander",
+                          race == 15 ~ "other")) %>% 
+  
   
   # Join observations with state-level covid data
   
@@ -344,16 +351,17 @@ labels <- c("asians" = "Favorability towards Asians",
 
 joined_data %>% 
   drop_na(asians, tot_cases) %>% 
-  group_by(date) %>% 
+  group_by(date, race) %>% 
   summarize(asians = mean(asians),
             tot_cases = mean(tot_cases), .groups = "drop") %>% 
-  ggplot(aes(x = tot_cases, y = asians)) +
-    geom_point() +
+  ggplot(aes(x = tot_cases, y = asians, color = race)) +
+    geom_point(size = 0.5, alpha = 0.75) +
     geom_smooth(method = "lm") +
     theme_minimal() +
     labs(title = "Favorability towards Asians and COVID cases", 
          x = "Total US COVID cases", 
-         y = "Favorability towards Asians")
+         y = "Favorability towards Asians") +
+    facet_wrap("race")
 
 ```
 ```{r gtrends-viz}
@@ -466,9 +474,9 @@ joined_geometry %>%
 
 
 ```{r models}
-m1_states <- lm(asians ~ fox + cnn + party + date + tot_cases + new_case + tot_death + new_death + state + lockdown + search_coronavirus + search_china_virus, joined_data %>% drop_na(tot_cases))
+m1_states <- lm(asians ~ fox + cnn + party + race + date + tot_cases + new_case + tot_death + new_death + state + lockdown + search_coronavirus + search_china_virus, joined_data %>% drop_na(tot_cases))
 
-m1 <- lm(asians ~ fox + cnn + party + date + tot_cases + new_case + tot_death + new_death + lockdown + search_coronavirus + search_china_virus, joined_data %>% drop_na(tot_cases))
+m1 <- lm(asians ~ fox + cnn + party + race + date + tot_cases + new_case + tot_death + new_death + lockdown + search_coronavirus + search_china_virus, joined_data %>% drop_na(tot_cases))
 
 summary(m1)
 
@@ -478,7 +486,6 @@ m_new <- lm(asians ~ date + new_case + new_death + lockdown, joined_data %>% dro
 
 m_search <- lm(asians ~ search_china + search_covid + search_coronavirus + search_china_virus, joined_data %>% drop_na(tot_cases))
 
-stargazer(m1, m_totals, m_new, m5, type = "text")
 
 m4 <- lm(asians ~ date + party + cnn + fox, joined_data %>% drop_na(tot_cases))
 
@@ -492,7 +499,7 @@ m5 <- lm(asians ~ date + party + tot_cases + tot_death + lockdown +
 m6 <- lm(asians ~ us_search_coronavirus + us_search_covid, 
          joined_data %>% drop_na(tot_cases))
 
-summary(m5)
+stargazer(m1, m_totals, m_new, m5, type = "text")
 
 dwplot(m6) +
   theme_minimal()

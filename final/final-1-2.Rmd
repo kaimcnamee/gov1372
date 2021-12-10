@@ -1,0 +1,444 @@
+---
+title: "final-1-1"
+author: "Kai McNamee"
+date: "11/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(estimatr)
+library(haven)
+library(stargazer)
+library(lubridate)
+library(sjlabelled)
+library(latticeExtra)
+library(gtrendsR)
+library(janitor)
+library(dotwhisker)
+
+# Mapping
+library(tidycensus)
+library(sf)
+```
+
+```{r read-data message=FALSE}
+
+### Nationscape data
+
+# Collect the file names and select which ones we want
+
+file_names_1 <- list.files("data/Nationscape-DataRelease_WeeklyMaterials_DTA/phase_1_v20200814/") %>% .[1:24]
+file_names_2 <- list.files("data/Nationscape-DataRelease_WeeklyMaterials_DTA/phase_2_v20200814/") %>% .[1:26]
+
+# Reading in all phase 1 and 2 weeks
+
+phase_1 <- map_dfr(.x = file_names_1, 
+                   ~read_dta(file = str_c("data/Nationscape-DataRelease_WeeklyMaterials_DTA/phase_1_v20200814/", ., "/", ., ".dta")) %>% 
+                     remove_all_labels()) %>%   
+  mutate(across(.cols = everything(), ~na_if(., 999))) %>% 
+  mutate(across(.cols = everything(), ~na_if(., 888)))
+
+phase_2 <- map_dfr(.x = file_names_2, 
+                   ~read_dta(file = str_c("data/Nationscape-DataRelease_WeeklyMaterials_DTA/phase_2_v20200814/", ., "/", ., ".dta")) %>% 
+                     remove_all_labels()) %>%   
+  mutate(across(.cols = everything(), ~na_if(., 999))) %>% 
+  mutate(across(.cols = everything(), ~na_if(., 888)))
+
+# Join phase 1 and 2
+
+ns_joined <- full_join(phase_1, phase_2)
+
+# Select variables
+
+ns_vars <- c(party = "pid3", 
+             gender = "gender",
+             race = "race_ethnicity",
+             state = "state",
+             fox = "news_sources_fox",
+             cnn = "news_sources_cnn",
+             asians = "group_favorability_asians")
+
+ns_selected <- ns_joined %>% 
+  select(response_id, start_date, ns_vars) %>% 
+  mutate(party = case_when(party == 1 ~ "Democrat",
+                           party == 2 ~ "Republican",
+                           party == 3 ~ "Independent",
+                           T ~ NA_character_),
+         fox = ifelse(fox == 1, TRUE, FALSE),
+         cnn = ifelse(cnn == 1, TRUE, FALSE),
+         start_date = as_date(start_date)) %>% 
+  rename(date = start_date)
+
+### Covid data
+# Read covid data from
+# https://data.cdc.gov/Case-Surveillance/United-States-COVID-19-Cases-and-Deaths-by-State-o/9mfq-cb36
+
+covid_states <- read_csv("data/United_States_COVID-19_Cases_and_Deaths_by_State_over_Time.csv", 
+                         col_types = cols(.default = col_guess())) %>% 
+  rename(date = submission_date) %>%
+  mutate(date = as_date(mdy(date))) %>% 
+  filter(date < as_date("2020-08-01)")) %>% 
+  select(date, state, tot_cases, new_case, tot_death, new_death)
+
+### Lockdown data
+# Read lockdown data from https://www.nytimes.com/interactive/2020/us/coronavirus-stay-at-home-order.html
+
+lockdowns <- read_csv("data/nyt_stay_at_home.csv", col_types = cols(.default = col_guess())) %>% 
+  select(Abbreviation, Date) %>% 
+  rename(lockdown_start = Date, state = Abbreviation) %>% 
+  mutate(lockdown_start = as_date(mdy(lockdown_start)))
+```
+
+```{r read-gtrends}
+
+# Note: calls using multiple keywords will return hits relative to each other,
+# so run the calls separately for each keyword. 
+
+state_abbreviations <- tibble(location = state.name) %>%
+   bind_cols(tibble(state = state.abb)) %>%
+   bind_rows(tibble(location = "District of Columbia", state = "DC"))
+
+### US search trends over time: "coronavirus"
+
+us_search_coronavirus <- gtrends(keyword = "coronavirus",
+                                 geo = "US",
+                                 gprop = "web",
+                                 time = "2020-01-22 2020-07-02")
+
+us_search_coronavirus <- us_search_coronavirus$interest_over_time %>% 
+  mutate(hits = as.numeric(replace(hits, hits == "<1", 0))) %>% 
+  select(date, hits) %>% 
+  rename(us_search_coronavirus = hits)
+
+### US search trends over time: "covid"
+
+us_search_covid <- gtrends(keyword = "covid",
+                           geo = "US",
+                           gprop = "web",
+                           time = "2020-01-22 2020-07-02")
+
+us_search_covid <- us_search_covid$interest_over_time %>% 
+  mutate(hits = as.numeric(replace(hits, hits == "<1", 0))) %>% 
+  select(date, hits) %>% 
+  rename(us_search_covid = hits)
+
+# gtrends() returns an object with time series data only for the national leve
+# -- for state data over time, call the gtrends function for every 2 day pair in
+# the date range.
+
+### State search trends for "coronavirus"
+
+dates <- tibble(date_pair = paste(seq(as_date("2020-01-22"), as_date("2020-07-02"), "days"),
+                                   seq(as_date("2020-01-23"), as_date("2020-07-03"), "days"))) %>%
+  mutate(call_group = row_number())
+# 
+# state_search_coronavirus <- map(.x = dates$date_pair, 
+#                                 ~gtrends(keyword = "coronavirus", 
+#                                          geo = "US", 
+#                                          gprop = "web", 
+#                                          time = as_character(.)))
+# 
+# # Unnest the list object gtrends() outputs
+# 
+# state_search_coronavirus <- map_dfr(.x = seq(1, 163, 1), 
+#                                     ~state_search_coronavirus[[.]]$interest_by_region)
+# 
+# # Clean the data and match calls with dates
+# 
+# state_search_coronavirus <- state_search_coronavirus %>%
+#   mutate(call_group = rep(seq(1, 163, 1), each = 51)) %>% 
+#   group_by(call_group) %>%
+#   clean_names() %>%
+#   left_join(dates, by = "call_group") %>%
+#   separate(col = date_pair, into = c("start_date", "end_date"), sep = "\\s") %>%
+#   mutate(date = as_date(start_date),
+#          end_date = as_date(end_date)) %>%
+#   select(-start_date, -end_date) %>% 
+#   left_join(state_abbreviations, by = "location")
+# 
+# saveRDS(state_search_coronavirus, "data/state_search_coronavirus.RDS")
+
+state_search_coronavirus <- readRDS("data/state_search_coronavirus.RDS") %>%
+  ungroup() %>%
+  select(date, state, hits) %>%
+  rename(state_search_coronavirus = hits)
+
+# ### State search trends for "covid"
+# 
+# state_search_covid <- map(.x = dates$date_pair,
+#                           ~gtrends(keyword = "covid",
+#                                    geo = "US",
+#                                    gprop = "web",
+#                                    time = as_character(.)))
+# 
+# # Unnest the list object gtrends() outputs
+# 
+# state_search_covid <- map_dfr(.x = seq(1, 163, 1),
+#                               ~state_search_covid[[.]]$interest_by_region)
+# 
+# # Clean the data and match calls with dates
+# 
+# state_search_covid <- state_search_covid %>%
+#   mutate(call_group = rep(seq(1, 163, 1), each = 51)) %>%
+#   group_by(call_group) %>%
+#   clean_names() %>%
+#   left_join(dates, by = "call_group") %>%
+#   separate(col = date_pair, into = c("start_date", "end_date"), sep = "\\s") %>%
+#   mutate(date = as_date(start_date),
+#          end_date = as_date(end_date)) %>%
+#   select(-start_date, -end_date) %>%
+#   left_join(state_abbreviations, by = "location")
+# 
+# saveRDS(state_search_covid, "data/state_search_covid.RDS")
+
+state_search_covid <- readRDS("data/state_search_covid.RDS") %>% 
+  ungroup() %>% 
+  select(date, state, hits) %>% 
+  rename(state_search_covid = hits)
+```
+
+```{r join}
+
+### Join Nationscape, COVID, lockdowns, and search data
+
+joined_data <- ns_selected %>% 
+  mutate(race = case_when(race == 1 ~ "white", 
+                          race == 2 ~ "black",
+                          race == 3 ~ "american_indian",
+                          race %in% seq(4, 10, 1) ~ "asian",
+                          race %in% c(11, 12, 13, 14) ~ "pacific_islander",
+                          race == 15 ~ "other")) %>% 
+  
+  # Join observations with state-level covid data
+  
+  left_join(covid_states %>% 
+              rename(state_tot_cases = tot_cases,
+                     state_new_case = new_case, 
+                     state_tot_death = tot_death,
+                     state_new_death = new_death), by = c("date", "state")) %>% 
+  
+  # Join observations with national covid data (group by date and sum cases
+  # before join)
+  
+  left_join(covid_states %>% 
+              group_by(date) %>% 
+              summarize(us_tot_cases = sum(tot_cases),
+                        us_new_case = sum(new_case),
+                        us_tot_death = sum(tot_death),
+                        us_new_death = sum(new_death),
+                        .groups = "drop"), 
+            by = "date") %>% 
+  
+  # Join lockdown data. 
+  
+  left_join(lockdowns, by = "state") %>% 
+    
+  # For case_when: 
+  # 1. code lockdown as NA if the observation is before the pandemic started (ie when tot_cases == NA)
+  # 2. code lockdown as FALSE if the respondent's state never implemented a
+  #     lockdown (ie when tot_cases =/= NA, but lockdown start_date == NA)
+  # 3. code lockdown as FALSE if the response is before the respondent's state
+  #     implmented a lockdown (ie when tot_cases =/= NA, and lockdown start_date =/=
+  #     NA)
+  # 4. otherwise, code lockdown as TRUE (ie when tot_cases =/= NA, lockdown
+  #     start_date =/= NA, and response date is after lockdown start_date)
+  
+  mutate(lockdown = case_when(is.na(us_tot_cases) == TRUE ~ NA, 
+                              is.na(lockdown_start) == TRUE ~ FALSE, 
+                              date < lockdown_start ~ FALSE,
+                              T ~ TRUE)) %>% 
+  
+  # Join US-level search trends
+  
+  left_join(us_search_coronavirus, by = "date") %>% 
+  left_join(us_search_covid, by = "date") %>% 
+  
+  # Join state-level search trends
+  
+  left_join(state_search_coronavirus, by = c("date", "state")) %>% 
+  left_join(state_search_covid, by = c("date", "state"))
+
+saveRDS(joined_data, "data/joined_data_2.RDS")
+```
+
+
+```{r cases-viz}
+
+# group_favorability_asians plot
+
+joined_data %>%
+  drop_na(asians) %>%
+  group_by(date) %>%
+  summarize(asians = mean(asians),
+            tot_cases = mean(us_tot_cases), .groups = "drop") %>%
+  ggplot(aes(x = as_date(date), y = asians)) +
+    geom_point(color = "#f8766d") +
+    geom_smooth(color = "#f8766d", method = "lm", formula = y ~ x) +
+    theme_minimal() +
+    labs(title = "Favorability towards Asians over time",
+         x = "", y = "Favorability towards Asians") +
+    scale_x_date(date_labels = "%B-%Y")
+
+# tot_cases plot
+
+joined_data %>%
+  drop_na(us_tot_cases) %>%
+  group_by(date) %>%
+  summarize(asians = mean(asians),
+            tot_cases = mean(us_tot_cases), .groups = "drop") %>% 
+  ggplot(aes(x = as_date(date), y = tot_cases)) +
+    geom_point(color = "#00bfc4") +
+    theme_minimal() +
+    labs(title = "Total COVID cases over time",
+         x = "", y = "Total COVID cases") +
+  scale_x_date(date_labels = "%b-%Y")
+
+labels <- c("asians" = "Favorability towards Asians", 
+            "tot_cases" = "Total cases")
+
+# joined_data %>% 
+#   drop_na(asians, tot_cases) %>% 
+#   group_by(date) %>% 
+#   summarize(asians = mean(asians),
+#             tot_cases = mean(tot_cases), .groups = "drop") %>% 
+#   pivot_longer(cols = c(asians, tot_cases), names_to = "series", values_to = "values") %>% 
+#   ggplot(aes(x = date, y = values, color = series)) +
+#     geom_point(size = 0.5) +
+#     facet_wrap("series", scales = "free_y", labeller = as_labeller(labels)) +
+#     # scale_x_date(date_labels = "%b-%Y") +
+#     scale_color_discrete(labels = as_labeller(labels), name = "") +
+#     theme_minimal() +
+#     theme(axis.text.x = element_text(angle = 45, vjust = 0.5)) +
+#     labs(title = "", x = "", y = "") 
+
+joined_data %>% 
+  drop_na(party) %>% 
+  drop_na(asians, us_tot_cases) %>% 
+  group_by(date, party) %>% 
+  summarize(asians = mean(asians),
+            tot_cases = mean(us_tot_cases), .groups = "drop") %>% 
+  ggplot(aes(x = tot_cases, y = asians, color = party)) +
+    geom_point(size = 0.5, alpha = 0.75) +
+    geom_smooth(method = "lm") +
+    theme_minimal() +
+    labs(title = "Favorability towards Asians and COVID cases", 
+         x = "Total US COVID cases", 
+         y = "Favorability towards Asians") +
+    facet_wrap("party")
+
+joined_data %>% 
+  drop_na(party) %>% 
+  drop_na(asians, state_tot_cases) %>% 
+  group_by(date, party) %>% 
+  summarize(asians = mean(asians),
+            tot_cases = mean(state_tot_cases), .groups = "drop") %>% 
+  ggplot(aes(x = tot_cases, y = asians, color = party)) +
+    geom_point(size = 0.5, alpha = 0.75) +
+    geom_smooth(method = "lm") +
+    theme_minimal() +
+    labs(title = "Favorability towards Asians and COVID cases", 
+         x = "State COVID cases", 
+         y = "Favorability towards Asians") +
+    facet_wrap("party")
+
+```
+```{r gtrends-viz}
+# Visualization with state level covid search trends
+
+joined_data %>% 
+  pivot_longer(cols = c(state_search_covid, state_search_coronavirus), 
+               names_to = "keyword", values_to = "hits") %>% 
+  drop_na(asians) %>% 
+  group_by(keyword, hits) %>% 
+  summarize(asians = mean(asians), .groups = "drop") %>% 
+  ggplot(aes(x = hits, y = asians, color = keyword)) +
+    geom_point(size = 0.5, alpha = 0.5) +
+    geom_smooth(method = "lm", se = F) +
+    scale_color_discrete(labels = 
+                           as_labeller(c("state_search_coronavirus" = "Coronavirus",
+                                         "state_search_covid" = "COVID")), 
+                         name = "") +
+    theme_minimal()
+
+# Visualize with US-level covid search trends
+
+joined_data %>% 
+  drop_na(asians, us_search_covid, us_search_coronavirus) %>% 
+  pivot_longer(cols = c(us_search_covid, us_search_coronavirus), 
+               names_to = "keyword", values_to = "hits") %>% 
+  group_by(keyword, hits) %>% 
+  summarize(asians = mean(asians), .groups = "drop") %>%  
+  ggplot(aes(x = hits, y = asians, color = keyword)) +
+    geom_point(size = 0.5, alpha = 0.5) +
+    geom_smooth(method = "lm", se = F) +
+    # facet_wrap("keyword") +
+    scale_color_discrete(labels = 
+                           as_labeller(c("us_search_coronavirus" = "Coronavirus",
+                                         "us_search_covid" = "COVID")), 
+                         name = "") +
+    theme_minimal()
+```
+
+```{r lockdown-discontinuity}
+
+joined_data %>% 
+  select(date, party, asians, lockdown_start, lockdown) %>% 
+  drop_na(lockdown_start, asians, party) %>% 
+  mutate(days_to_lockdown = as_numeric(difftime(date, lockdown_start, units = "days")),
+         lockdown = days_to_lockdown >= 0) %>% 
+  group_by(days_to_lockdown, lockdown, party) %>% 
+  summarize(asians = mean(asians), .groups = "drop") %>% 
+  ggplot(aes(x = days_to_lockdown, y = asians, color = party, group = lockdown)) +
+    geom_point(size = 0.5, alpha = 0.5) +
+    geom_smooth(method = "lm", se = F) +
+    theme_bw() +
+    facet_wrap("party")
+```
+```{r models}
+m_cases <- lm(asians ~ party + state_tot_cases + us_tot_cases, joined_data %>% drop_na(us_tot_cases))
+m_search <- lm(asians ~ party + state_search_coronavirus + state_search_covid + us_search_coronavirus + us_search_covid, joined_data %>% drop_na(us_tot_cases))
+
+m_lockdown <- lm(asians ~ lockdown + days_to_lockdown + lockdown:days_to_lockdown,
+                 joined_data %>% 
+                   select(date, party, asians, lockdown_start, lockdown) %>% 
+                   drop_na(lockdown_start, asians, party) %>% 
+                   mutate(days_to_lockdown = as_numeric(difftime(date, lockdown_start, units = "days")),
+                          lockdown = days_to_lockdown >= 0) %>% 
+                   group_by(days_to_lockdown, lockdown, party) %>% 
+                   summarize(asians = mean(asians), .groups = "drop"))
+
+stargazer(m_cases, m_search, m_lockdown, type = "text")
+```
+
+
+```{r model-testing}
+m1_states <- lm(asians ~ fox + cnn + party + race + date + state_tot_cases + state_tot_death + state + lockdown + state_search_coronavirus + state_search_covid, joined_data %>% drop_na(us_tot_cases))
+
+m2_states <- lm(asians ~ fox + cnn + party + race + date + state_tot_cases + state_search_coronavirus + state_search_covid, joined_data %>% drop_na(us_tot_cases))
+
+stargazer(m1_states, m2_states, type = "text")
+
+m3_us <- lm(asians ~ party + us_tot_cases + us_search_coronavirus + us_search_covid, joined_data %>% drop_na(us_tot_cases))
+
+m3_state <- lm(asians ~ party + state_tot_cases + state_search_coronavirus + state_search_covid + lockdown, joined_data %>% drop_na(us_tot_cases))
+
+m3_int <- lm(asians ~ party + state_tot_cases + state_search_coronavirus + state_search_covid + lockdown, joined_data %>% drop_na(us_tot_cases))
+
+stargazer(m3_us, m3_state, type = "text")
+
+
+m4 <- lm(asians ~ party + us_search_coronavirus, joined_data %>% drop_na(us_tot_cases))
+m4_int <- lm(asians ~ party + us_search_coronavirus + party*us_search_coronavirus, joined_data %>% drop_na(us_tot_cases))
+
+stargazer(m4, m4_int, type = "text")
+
+m_search <- lm(asians ~ us_search_coronavirus + us_search_covid + state_search_coronavirus + state_search_covid, joined_data %>% drop_na(us_tot_cases))
+
+dwplot(m6) +
+  theme_minimal()
+```
+
+
+

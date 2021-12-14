@@ -17,29 +17,21 @@
 !/final/**.pdf
 
 ### Final data
-# Nationscape data
-!/fina/data/Nationscape-DataRelease_WeeklyMaterials_DTA/phase_1_v20200814
-!/fina/data/Nationscape-DataRelease_WeeklyMaterials_DTA/phase_2_v20200814
 
 # Gtrends data
 !/final/data/us_search_coronavirus.RDS
 !/final/data/us_search_covid.RDS
 !/final/data/state_search_coronavirus.RDS
-!/fina/data/state_search_covid.RDS
+!/final/data/state_search_covid.RDS
 
 # COVID data
-!/fina/data/United_States_COVID-19_Cases_and_Deaths_by_State_over_Time.csv
+!/final/data/United_States_COVID-19_Cases_and_Deaths_by_State_over_Time.csv
 
 # Lockdown data
-!/fina/data/nyt_stay_at_home.csv
+!/final/data/nyt_stay_at_home.csv
 
 # Joined data
-!/fina/data/joined_data_2.RDS
-
-
-
-
-
+!/final/data/joined_data_2.RDS
 
 
 !/w1/**.Rmd

@@ -264,6 +264,8 @@ saveRDS(joined_data, "data/joined_data_2.RDS")
 ```
 
 ```{r}
+### Read cleaned data
+
 joined_data <- readRDS("data/joined_data.RDS")
 ```
 

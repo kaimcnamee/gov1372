@@ -19,16 +19,6 @@ library(janitor)
 library(dotwhisker)
 ```
 
-```{r gtrends-test}
-methods_test <- gtrends(keyword = "coronavirus",
-                                 geo = "US",
-                                 gprop = "web",
-                                 time = "2020-01-22 2020-07-02")
-methods_test$interest_by_region
-```
-
-
-
 ```{r read-data message=FALSE}
 
 ### Nationscape data
@@ -118,6 +108,8 @@ us_search_coronavirus <- us_search_coronavirus$interest_over_time %>%
   select(date, hits) %>% 
   rename(us_search_coronavirus = hits)
 
+saveRDS(us_search_coronavirus, "data/us_search_coronavirus.RDS")
+
 ### US search trends over time: "covid"
 
 us_search_covid <- gtrends(keyword = "covid",
@@ -129,6 +121,8 @@ us_search_covid <- us_search_covid$interest_over_time %>%
   mutate(hits = as.numeric(replace(hits, hits == "<1", 0))) %>% 
   select(date, hits) %>% 
   rename(us_search_covid = hits)
+
+saveRDS(us_search_covid, "data/us_search_covid.RDS")
 
 # gtrends() returns an object with time series data only for the national leve
 # -- for state data over time, call the gtrends function for every 2 day pair in

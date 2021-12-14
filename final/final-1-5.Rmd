@@ -263,6 +263,10 @@ joined_data <- ns_selected %>%
 saveRDS(joined_data, "data/joined_data_2.RDS")
 ```
 
+```{r}
+joined_data <- readRDS("data/joined_data.RDS")
+```
+
 ```{r cases-viz}
 ### FIGURE 5
 ### group_favorability_asians plot

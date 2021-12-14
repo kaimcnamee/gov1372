@@ -19,6 +19,17 @@ library(janitor)
 library(dotwhisker)
 ```
 
+```{r gtrends-test}
+
+methods_test <- gtrends(keyword = "coronavirus",
+                                 geo = "US",
+                                 gprop = "web",
+                                 time = "2020-01-22 2020-07-02")
+methods_test$interest_by_region
+```
+
+
+
 ```{r read-data message=FALSE}
 
 ### Nationscape data
@@ -271,27 +282,35 @@ joined_data %>%
   ggplot(aes(x = as_date(date), y = asians)) +
     geom_point(color = "#f8766d") +
     geom_smooth(color = "#f8766d", method = "lm", formula = y ~ x) +
-    theme_minimal() +
     labs(title = "Favorability towards Asians over time",
          x = "", y = "Favorability towards Asians") +
     scale_x_date(date_labels = "%B-%Y")
 
-# tot_cases plot
+# favorability towards asians and new cases over time
 
-joined_data %>%
-  drop_na(us_tot_cases) %>%
-  group_by(date) %>%
-  summarize(asians = mean(asians),
-            tot_cases = mean(us_tot_cases), .groups = "drop") %>% 
-  ggplot(aes(x = as_date(date), y = tot_cases)) +
-    geom_point(color = "#00bfc4") +
-    theme_minimal() +
-    labs(title = "Total COVID cases over time",
-         x = "", y = "Total COVID cases") +
-  scale_x_date(date_labels = "%b-%Y")
+joined_data %>% 
+  drop_na(asians, us_new_case) %>% 
+  group_by(date) %>% 
+  summarize(asians = mean(asians) / 4,
+            us_new_case = mean(us_new_case)) %>% 
+  mutate(prop_new = us_new_case / max(us_new_case)) %>% 
+  pivot_longer(cols = c(asians, prop_new), names_to = "series", values_to = "value") %>% 
+  ggplot(aes(x = date, y = value, color = series)) +
+    geom_line()
 
-labels <- c("asians" = "Favorability towards Asians", 
-            "tot_cases" = "Total cases")
+# including pre pandemic data
+
+joined_data %>% 
+  drop_na(asians) %>% 
+  mutate(us_new_case = replace_na(us_new_case, 0)) %>% 
+  group_by(date) %>% 
+  summarize(asians = mean(asians) / 4,
+            us_new_case = mean(us_new_case)) %>% 
+  mutate(prop_new = us_new_case / max(us_new_case)) %>% 
+  pivot_longer(cols = c(asians, prop_new), names_to = "series", values_to = "value") %>% 
+  ggplot(aes(x = date, y = value, color = series)) +
+    geom_line()
+
 
 # joined_data %>% 
 #   drop_na(asians, tot_cases) %>% 
@@ -308,36 +327,50 @@ labels <- c("asians" = "Favorability towards Asians",
 #     theme(axis.text.x = element_text(angle = 45, vjust = 0.5)) +
 #     labs(title = "", x = "", y = "") 
 
-joined_data %>% 
-  drop_na(party) %>% 
-  drop_na(asians, us_tot_cases) %>% 
-  group_by(date, party) %>% 
-  summarize(asians = mean(asians),
-            tot_cases = mean(us_tot_cases), .groups = "drop") %>% 
-  ggplot(aes(x = tot_cases, y = asians, color = party)) +
-    geom_point(size = 0.5, alpha = 0.75) +
-    geom_smooth(method = "lm") +
-    theme_minimal() +
-    labs(title = "Favorability towards Asians and COVID cases", 
-         x = "Total US COVID cases", 
-         y = "Favorability towards Asians") +
-    facet_wrap("party") +
-    theme_bw()
+# y = Asians, x = us_new_case
 
 joined_data %>% 
   drop_na(party) %>% 
-  drop_na(asians, state_tot_cases) %>% 
+  drop_na(asians, us_new_case) %>% 
   group_by(date, party) %>% 
   summarize(asians = mean(asians),
-            tot_cases = mean(state_tot_cases), .groups = "drop") %>% 
-  ggplot(aes(x = tot_cases, y = asians, color = party)) +
+            us_new_case = mean(us_new_case), .groups = "drop") %>% 
+  ggplot(aes(x = us_new_case / 10,000, y = asians, color = party)) +
     geom_point(size = 0.5, alpha = 0.75) +
     geom_smooth(method = "lm") +
-    theme_minimal() +
+    # facet_wrap("party") +
+    theme_bw()
+
+# y = Asians, x = state_new_case
+
+joined_data %>% 
+  drop_na(party) %>% 
+  drop_na(asians, state_new_case) %>% 
+  group_by(date, party) %>% 
+  summarize(asians = mean(asians),
+            state_new_case = mean(state_new_case), .groups = "drop") %>% 
+  ggplot(aes(x = state_new_case, y = asians, color = party)) +
+    geom_point(size = 0.5, alpha = 0.75) +
+    geom_smooth(method = "lm") +
+    # facet_wrap("party") +
+    theme_bw()
+
+# Chart favorability towards asians while scaling new cases as relative severity
+# throughout the pandemic
+# y = Asians, x = us_new_case / max(us_new_case)
+
+joined_data %>% 
+  drop_na(party, asians, us_new_case) %>% 
+  group_by(date, party) %>% 
+  summarize(asians = mean(asians),
+            us_new_case = mean(us_new_case), .groups = "drop") %>%
+  ggplot(aes(x = us_new_case / max(us_new_case), y = asians, color = party)) +
+    geom_point(size = 0.5, alpha = 0.75) +
+    geom_smooth(method = "lm") +
     labs(title = "Favorability towards Asians and COVID cases", 
-         x = "State COVID cases", 
+         x = "Total US COVID cases", 
          y = "Favorability towards Asians") +
-    facet_wrap("party") +
+    # facet_wrap("party") +
     theme_bw()
 
 ```
@@ -376,6 +409,23 @@ joined_data %>%
                                          "us_search_covid" = "COVID")), 
                          name = "") +
     theme_bw()
+
+us_search_coronavirus %>% 
+  left_join(us_search_covid, by = "date") %>% 
+  pivot_longer(us_search_coronavirus:us_search_covid, 
+               names_to = "keyword",
+               values_to = "hits") %>%
+  ggplot(aes(x = date, y = hits, color = keyword)) +
+    geom_line()
+
+joined_data %>% 
+  select(date, us_tot_cases, us_new_case, us_search_coronavirus, us_search_covid) %>% 
+  drop_na() %>% 
+  mutate(prop_new = us_new_case / max(us_new_case) * 100) %>% 
+  pivot_longer(c(us_search_coronavirus, us_search_covid, prop_new), names_to = "series", 
+               values_to = "values") %>% 
+  ggplot(aes(x = date, y = values, color = series)) +
+    geom_line()
 ```
 
 ```{r lockdown-discontinuity}
@@ -398,7 +448,7 @@ joined_data %>%
          lockdown = days_to_lockdown >= 0) %>% 
   group_by(days_to_lockdown, lockdown, party) %>% 
   summarize(asians = mean(asians), .groups = "drop") %>% 
-  ggplot(aes(x = days_to_lockdown, y = asians, color = party, group = lockdown)) +
+  ggplot(aes(x = days_to_lockdown, y = asians, color = lockdown, group = lockdown)) +
     geom_point(size = 0.5, alpha = 0.5) +
     geom_smooth(method = "lm", se = F) +
     theme_bw() +
@@ -406,10 +456,48 @@ joined_data %>%
 ```
 
 ```{r models}
-m_cases <- lm(asians ~ party + state_tot_cases + us_tot_cases, joined_data %>% drop_na(us_tot_cases))
-m_search <- lm(asians ~ party + state_search_coronavirus + state_search_covid + us_search_coronavirus + us_search_covid, joined_data %>% drop_na(us_tot_cases))
 
-m_lockdown <- lm(asians ~ party + lockdown + days_to_lockdown + lockdown:days_to_lockdown,
+# Clean model data
+
+model_data <- joined_data %>% 
+  drop_na(us_tot_cases, us_new_case, state_new_case) %>% 
+  mutate(us_new_prop = us_new_case/max(us_new_case),
+         state_new_prop = state_new_case/max(state_new_case)) %>% 
+  rename(group_favorability_asians = asians)
+
+model_data_2 <- joined_data %>% 
+  mutate(us_tot_cases = replace_na(us_tot_cases, 0),
+         us_new_case = replace_na(us_new_case, 0),
+         state_tot_case = replace_na(state_tot_cases, 0),
+         state_new_case = replace_na(state_new_case, 0)) %>% 
+  drop_na(asians) %>% 
+  mutate(us_new_prop = us_new_case/max(us_new_case),
+         state_new_prop = state_new_case/max(state_new_case)) %>% 
+  rename(group_favorability_asians = asians)
+
+# Testing H1: favorability towards asians ~ case numbers
+
+m_cases_1 <- lm(group_favorability_asians ~ party + I(us_tot_cases/10000) + I(us_new_case/10000) + I(state_tot_cases/10000) + I(state_new_case/10000), model_data)
+
+m_cases_1_2 <- lm(group_favorability_asians ~ party + I(us_tot_cases/10000) + I(us_new_case/10000) + I(state_tot_cases/10000) + I(state_new_case/10000), model_data_2)
+
+stargazer(m_cases_1, m_cases_1_2, type = "text", digits = NA)
+
+m_cases_2 <- lm(group_favorability_asians ~ party + I(us_new_case/10000) + I(state_new_case/10000), model_data)
+
+m_cases_3 <- lm(group_favorability_asians ~ party + us_new_prop + state_new_prop, model_data)
+
+stargazer(m_cases_1, m_cases_2, m_cases_3, type = "text", digits = NA)
+
+# Testing H2: favorability towards asians ~ search trends
+
+m_search <- lm(group_favorability_asians ~ party + state_search_coronavirus + state_search_covid + us_search_coronavirus + us_search_covid, model_data)
+
+summary(m_search)
+
+# Testing H3: favorability towards asians ~ days to lockdown
+
+m_lockdown <- lm(group_favorability_asians ~ party + lockdown + days_to_lockdown + lockdown:days_to_lockdown + lockdown:party,
                  joined_data %>% 
                    select(date, party, asians, lockdown_start, lockdown) %>% 
                    drop_na(lockdown_start, asians, party) %>% 
@@ -418,34 +506,41 @@ m_lockdown <- lm(asians ~ party + lockdown + days_to_lockdown + lockdown:days_to
                    group_by(days_to_lockdown, lockdown, party) %>% 
                    summarize(asians = mean(asians), .groups = "drop"))
 
-stargazer(m_cases, m_search, m_lockdown, type = "text")
+stargazer(m_cases_1, m_cases_2, m_search, m_lockdown, type = "text", digits = NA)
+```
+
+```{r decay-prediction}
+# Predict decay of regression discontinuity design
+
+pred_data <- tibble(days_to_lockdown = rep(seq(-100, 100, 1), 6),
+                    lockdown = rep(c(rep(F, 201), rep(T, 201)), 3),
+                    party = c(rep("Democrat", 402), 
+                              rep("Independent", 402), 
+                              rep("Republican", 402)))
+
+# Fit a the m_lockdown model to the prediction data for each party
+
+preds_all <- predict(m_lockdown, pred_data, se.fit = T)
+preds_all <- tibble(asians = preds_all$fit,
+                    se = preds_all$se.fit,
+                    days_to_lockdown = rep(seq(-100, 100, 1), 6),
+                    lockdown = rep(c(rep(F, 201), rep(T, 201)), 3),
+                    party = c(rep("Democrat", 402), 
+                              rep("Independent", 402), 
+                              rep("Republican", 402)))
+
+# Filter the prediction data to find the day at which pre and post lockdown
+# lines intersect.
+
+preds_all <- preds_all %>% 
+  pivot_wider(names_from = lockdown, values_from = c(asians, se)) %>%
+  filter(days_to_lockdown >= 0) %>% 
+  mutate(dif = abs(asians_FALSE - asians_TRUE)) %>% 
+  group_by(party) %>% 
+  filter(dif == min(dif))
+
+preds_all
 ```
 
 
-```{r model-testing}
-m1_states <- lm(asians ~ fox + cnn + party + race + date + state_tot_cases + state_tot_death + state + lockdown + state_search_coronavirus + state_search_covid, joined_data %>% drop_na(us_tot_cases))
-
-m2_states <- lm(asians ~ fox + cnn + party + race + date + state_tot_cases + state_search_coronavirus + state_search_covid, joined_data %>% drop_na(us_tot_cases))
-
-stargazer(m1_states, m2_states, type = "text")
-
-m3_us <- lm(asians ~ party + us_tot_cases + us_search_coronavirus + us_search_covid, joined_data %>% drop_na(us_tot_cases))
-
-m3_state <- lm(asians ~ party + state_tot_cases + state_search_coronavirus + state_search_covid + lockdown, joined_data %>% drop_na(us_tot_cases))
-
-m3_int <- lm(asians ~ party + state_tot_cases + state_search_coronavirus + state_search_covid + lockdown, joined_data %>% drop_na(us_tot_cases))
-
-stargazer(m3_us, m3_state, type = "text")
-
-
-m4 <- lm(asians ~ party + us_search_coronavirus, joined_data %>% drop_na(us_tot_cases))
-m4_int <- lm(asians ~ party + us_search_coronavirus + party*us_search_coronavirus, joined_data %>% drop_na(us_tot_cases))
-
-stargazer(m4, m4_int, type = "text")
-
-m_search <- lm(asians ~ us_search_coronavirus + us_search_covid + state_search_coronavirus + state_search_covid, joined_data %>% drop_na(us_tot_cases))
-
-```
-
-
-
+$$group\_favorability\_asians_i = \beta_1Democrat_i + \beta_2Independent_i + \beta_3Republican_i + \beta_4US_total_cases_i +  \epsilon_i$$

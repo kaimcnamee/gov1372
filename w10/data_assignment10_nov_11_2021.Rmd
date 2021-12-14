@@ -458,4 +458,16 @@ preds_combined %>%
          subtitle = "Modeling decay for respondents' who consume only Fox")
 ```
 
+For final project:
+```{r}
+m_test <- lm(group_favorability_asians ~ treatment + day_running + treatment:day_running, data = 
+               full_data_clean %>% 
+               group_by(day_running) %>% 
+               summarize(group_favorability_asians = mean(group_favorability_asians),
+            .groups = "drop") %>% 
+              mutate(treatment = fct_relevel(as.factor(ifelse(day_running < 0, "Before", "After")), 
+                                             "Before", "After")))
+
+summary(m_test)
+```
 

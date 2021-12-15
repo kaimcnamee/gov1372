@@ -19,7 +19,7 @@ library(janitor)
 library(dotwhisker)
 ```
 
-```{r read-data message=FALSE}
+```{r read-data, message=FALSE, eval=FALSE}
 
 ### Nationscape data
 
@@ -87,7 +87,7 @@ lockdowns <- read_csv("data/nyt_stay_at_home.csv", col_types = cols(.default = c
   mutate(lockdown_start = as_date(mdy(lockdown_start)))
 ```
 
-```{r read-gtrends}
+```{r read-gtrends, eval=FALSE}
 
 # Note: calls using multiple keywords will return hits relative to each other,
 # so run the calls separately for each keyword. 
@@ -199,7 +199,7 @@ state_search_covid <- readRDS("data/state_search_covid.RDS") %>%
   rename(state_search_covid = hits)
 ```
 
-```{r join}
+```{r join, eval=FALSE}
 
 ### Join Nationscape, COVID, lockdowns, and search data
 
